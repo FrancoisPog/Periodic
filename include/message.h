@@ -1,7 +1,7 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-int send_sring(int fd, const char *str);
+int send_string(int fd, const char *str);
 
 char *recv_string(int fd);
 

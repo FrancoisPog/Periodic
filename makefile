@@ -5,7 +5,7 @@ OBJDIR=object
 
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
-test_libmessage : $(OBJDIR)/test.o libmessage.so
+test_libmessage : $(OBJDIR)/test_libmessage.o libmessage.so
 	@echo make : $@
 	@gcc -L${PWD} $< -lmessage -o $@
 	
