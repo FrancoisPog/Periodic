@@ -6,8 +6,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+    
+// MAIN
+int main(int argc, char *argv[]){
 
-int test_send_recv_string(){
     // Named pipe creation
     if(mkfifo("pipe",0777) == -1){
         perror("mkfifo");
@@ -17,37 +19,51 @@ int test_send_recv_string(){
     
     // Fork
     if(fork() == 0){
-        // Open the named pipe on "read only"
+        // Open the named pipe on "write only"
         int fd = open("pipe",O_WRONLY);
         if(fd == -1){
             perror("open");
+            unlink("pipe");
             return 2;
         }
+
+        char **strings =calloc(4,sizeof(char *));
+        strings[0] = "Langage du Web";
+        // strings[0] = NULL;
+        strings[1] = "Système et Programmation Système";
+        strings[2] = "Programmation Objet Avancée ";
+        strings[3] = NULL;
          
-        // Send a string one the named pipe
-        if(send_string(fd,"Hello world !") == -1){
+        // Send the array of string in the named pipe
+        if(send_argv(fd,strings) == -1){
+            free(strings);
+            unlink("pipe");
             return 3;
         }
 
         // Close file descriptor
         if(close(fd) == -1){
             perror("close");
+            unlink("pipe");
             return 4;
         }
+
         // Unlink (remove) the pipe
         unlink("pipe");
+        free(strings);
         exit(0);
     }
 
-    // Open the named pipe on "write only"
+    // Open the named pipe on "read only"
     int fd = open("pipe",O_RDONLY);
     if(fd == -1){
         perror("open");
+        unlink("pipe");
         return 2;
     }
    
-    // Read a string on the named pipe
-    char *str = recv_string(fd);
+    // Read an array in the named pipe
+    char **str = recv_argv(fd);
     if(str == NULL){
         unlink("pipe");
         return 3;
@@ -55,13 +71,17 @@ int test_send_recv_string(){
     // Close file descriptor
     if(close(fd) == -1){
         perror("close");
+        unlink("pipe");
         return 4;
     }
     // Wait the child's death
     wait(NULL);
     
-    // Print the receive string
-    printf("%s\n",str);
+    size_t i = 0;
+    while(str[i] != NULL){
+        printf("strings[%zd] : %s\n",i,str[i]);
+        free(str[i++]);
+    }
 
     // Free string
     free(str);
@@ -70,10 +90,4 @@ int test_send_recv_string(){
     unlink("pipe");
     return 0;
 }
-
-// MAIN
-int main(int argc, char *argv[]){
-
-  return test_send_recv_string();
-    
-}
+  
