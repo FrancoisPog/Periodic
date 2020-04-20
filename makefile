@@ -5,6 +5,14 @@ OBJDIR=object
 
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
+periodic : $(OBJDIR)/periodic.o libmessage.so
+	@echo make : $@
+	@gcc -L${PWD} $< -lmessage -o $@
+
+period : $(OBJDIR)/period.o libmessage.so
+	@echo make : $@
+	@gcc -L${PWD} $< -lmessage -o $@
+
 test_libmessage : $(OBJDIR)/test_libmessage.o libmessage.so
 	@echo make : $@
 	@gcc -L${PWD} $< -lmessage -o $@

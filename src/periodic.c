@@ -1,3 +1,4 @@
+#include "message.h"
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -47,6 +48,10 @@ int get_period_pid(){
  *      > 1 if arguments aren't valid
  */ 
 int check_args(int argc, char *argv[], int *start, int *period, char **cmd, char ***args){
+    if(cmd == NULL || args == NULL || start == NULL || period == NULL || argv == NULL){
+        fprintf(stderr,"> Error [check_args] - At least one of parameters is NULL\n");
+        return -1;
+    }
     char *usage = "Usage : ./periodic [ start period cdm [arg]... ]" ;
 
     if(argc == 1){
@@ -131,5 +136,6 @@ int main(int argc, char *argv[]){
             ++i;
         }
     }
+    
     return 0;           
 }
