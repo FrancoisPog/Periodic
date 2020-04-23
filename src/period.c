@@ -1,4 +1,6 @@
+#define _POSIX_C_SOURCE 1
 #include "message.h"
+#include "command.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -7,7 +9,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-
+#include <signal.h>
 
 /**
  * Check if period is already running, otherwise create /tmp/period.pid and write the pid inside
@@ -86,8 +88,62 @@ int make_dir(){
     return 0;
 }
 
+volatile sig_atomic_t usr1 = 0;
+volatile sig_atomic_t usr2 = 0;
+
+/**
+ * Handler for SIGUSR1 and SIGUSR2
+ */
+void hand_sigusr(int sig){
+    if(sig == SIGUSR1){
+        usr1 = 1;
+    }else{
+        usr2 = 1;
+    }
+}
+
+/**
+ * Receive a command from periodic
+ */ 
+int recv_command(int pipe, struct command *cmd, size_t id){
+    time_t start;
+    int n = read(pipe,&start,sizeof(time_t));
+    if(n <= 0){
+        perror("read [start]");
+        return -1;
+    }
+
+    int period;
+    n = read(pipe,&period,sizeof(int));
+    if(n <= 0){
+        perror("read [period]");
+        return -1;
+    }
+
+    char *name = recv_string(pipe);
+    if(name == NULL){
+        return -1;
+    }
+    char **args = recv_argv(pipe);
+    if(args == NULL){
+        free(name);
+        return -1;
+    }
+
+    cmd->id = id; 
+    cmd->next = start;
+    cmd->period = period;
+    cmd->name = name;
+    cmd->args = args;
+
+    usr1 = 0;
+    return 0;
+}
+
+
+// MAIN 
 int main(){
-    
+    // Initialization
     if(write_pid() <= 0){
         return 1;
     }
@@ -100,8 +156,48 @@ int main(){
         return 3;
     }
 
+    // Set handler
+    struct sigaction sig_usr;
+    sigemptyset(&sig_usr.sa_mask);
+    sig_usr.sa_handler = hand_sigusr;
+    sig_usr.sa_flags = 0;
+    
+    if(sigaction(SIGUSR1,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+    if(sigaction(SIGUSR2,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+
+    // Creation commands list
+    size_t count = 0;
+    struct array commands_list;
+    array_create(&commands_list);
+
+
+
+
+    // Open pipe
+    int pipe = open("/tmp/period.fifo",O_RDONLY);
+    if(pipe == -1){
+        perror("open");
+        return 4;
+    }
+
+    while(1){
+        if(usr1){
+            struct command cmd;
+            recv_command(pipe,&cmd,count++);
+            array_add(&commands_list,cmd);
+            array_print(&commands_list);
+        }
+        pause();
+    }
 
     
+    array_destroy(&commands_list);
     unlink("/tmp/period.fifo");
     unlink("/tmp/period.pid");
      

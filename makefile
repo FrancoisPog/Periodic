@@ -7,13 +7,13 @@ OBJDIR=object
 
 all : period periodic
 
-periodic : $(OBJDIR)/periodic.o libmessage.so
+periodic : $(OBJDIR)/periodic.o libmessage.so libcommand.so
 	@echo make : $@
-	@gcc -L${PWD} $< -lmessage -o $@
+	@gcc -L${PWD} $< -lmessage -lcommand -o $@
 
-period : $(OBJDIR)/period.o libmessage.so
+period : $(OBJDIR)/period.o libmessage.so libcommand.so
 	@echo make : $@
-	@gcc -L${PWD} $< -lmessage -o $@
+	@gcc -L${PWD} $< -lmessage -lcommand -o $@
 
 test_libmessage : $(OBJDIR)/test_libmessage.o libmessage.so
 	@echo make : $@

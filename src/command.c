@@ -5,7 +5,8 @@
 
 // COMMAND
 
-void command_create(struct command *self, char *name, char **args, int period, time_t start){
+void command_create(struct command *self,size_t id, char *name, char **args, int period, time_t start){
+    self->id = id;
     self->name = name;
     self->args = args;
     self->next = start;
@@ -14,74 +15,68 @@ void command_create(struct command *self, char *name, char **args, int period, t
 
 
 void command_print(struct command *self){
-    printf("< %s | %li | %d >\n",self->name,self->next,self->period);
+    
+    printf("< [%zd] %li | %i | %s ",self->id,self->next,self->period,self->name);
+    size_t i = 0;
+    while(self->args[i] != NULL){
+        printf(" %s ",self->args[i++]);
+    }
+    printf(" >\n");
 }
 
 // COMMAND
 
-void list_create(struct list *self){
+void array_create(struct array *self){
     if(self == NULL){
         return;
     }
-    self->first = NULL;
+    
+    self->capacity = 10;
+    self->size = 0;
+    self->data = calloc(self->capacity, sizeof(struct command));
+
 }
 
-void list_destroy(struct list *self){
+void array_destroy(struct array *self){
     if(self == NULL){
         return;
     }
 
-    while(self->first != NULL){
-        struct node *next = self->first->next;
-        free(self->first);
-        self->first = next;
-    }
+    free(self->data);
+    self->data = NULL;
+    self->capacity = 0;
+    self->size = 0;
 }
 
-void list_add(struct list *self, struct command cmd){
+void array_add(struct array *self, struct command cmd){
     if(self == NULL){
         return;
     }
 
-    struct node *other = calloc(1,sizeof(struct node));
-    other->cmd = cmd;
-    other->next = self->first;
-    self->first = other;
+    if(self->size == self->capacity){
+		self->capacity *= 2;
+		struct command *data = calloc(self->capacity, sizeof(struct command));
+		memcpy(data, self->data, self->size * sizeof(struct command));
+		free(self->data);
+		self->data = data;
+	}
+	self->data[self->size] = cmd;
+	self->size ++;
     
 
 }
 
-void list_remove(struct list *self){
+void array_remove(struct array *self){
 
 }
 
-struct command* list_getNext(struct list *self){
-    struct command *cmd = &(self->first->cmd);
-    struct node *curr = self->first->next;
 
-    while(curr != NULL){
-        if(curr->cmd.next < cmd->next){
-            cmd = &(curr->cmd);
-        }
-        curr = curr->next;
-    }
 
-    cmd->next += cmd->period;
-
-    return cmd;
-
-}
-
-void list_print(struct list *self){
-    if(self == NULL){
-        return;
-    }
-
-    struct node *curr = self->first;
-    while(curr != NULL){
-        command_print(&(curr->cmd));
-        curr = curr->next;
-    }
+void array_print(struct array *self){
+    
+   for(size_t i = 0 ; i < self->size ; ++i){
+       command_print(&(self->data[i]));
+   }
 }
 
 

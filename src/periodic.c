@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 600
+#define _POSIX_C_SOURE 1
 #include "message.h"
 #include <stdio.h>
 #include <sys/types.h>
@@ -7,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <signal.h>
+#include <fcntl.h>
 
 /**
  * Get the PID of the current period process.
@@ -52,13 +56,17 @@ int get_period_pid(){
     return atoi(buf);
 }
 
+
+
+
+
 /**
  * Check the arguments and determine the start, the period, the command and its arguments.  
  * Return :
  *      > 0 if arguments are valid
  *      > 1 if arguments aren't valid
  */ 
-int check_args(int argc, char *argv[], int *start, int *period, char **cmd, char ***args){
+int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, char ***args){
     if(cmd == NULL || args == NULL || start == NULL || period == NULL || argv == NULL){
         fprintf(stderr,"> Error [check_args] - At least one of parameters is NULL\n");
         return -1;
@@ -126,31 +134,63 @@ int check_args(int argc, char *argv[], int *start, int *period, char **cmd, char
 
 }
 
+/**
+ * Send a command to period
+ */ 
+int send_command(int pipe,int pid,char *cmd, char **args, time_t start, int period){
+
+    kill(pid,SIGUSR1);
+
+    if(write(pipe,&start,sizeof(time_t)) == -1){
+        perror("fwrite");
+        return -1;
+    }
+
+    if(write(pipe,&period,sizeof(int)) == -1){
+        perror("fwrite");
+        return -1;
+    }
+
+    if(send_string(pipe,cmd) == -1){
+        return -1;
+    }
+
+    if(send_argv(pipe,args) == -1){
+        return -1;
+    }
+
+    return 0;
+}
 
 
 
+// MAIN
 int main(int argc, char *argv[]){
 
-    printf("pid : %d\n",get_period_pid());
-    
+    // printf("pid : %d\n",get_period_pid());
+    pid_t pid_period = get_period_pid();
+    if(pid_period == 0){
+        return 1;
+    }
 
-    // int start = -1, period = -1;
-    // char *cmd = NULL;
-    // char **args = NULL;
-    // if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
-    //     return 1;
-    // }
+    // check and get arguments values
+    time_t start = -1;
+    int period = -1;
+    char *cmd = NULL;
+    char **args = NULL;
+    if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
+        return 1;
+    }
 
-    // if(argc != 1){
-    //     printf("start = %i\n",start);
-    //     printf("period = %d\n",period);
-    //     printf("command = %s\n",cmd);
-    //     int i =0;
-    //     while(args[i] != NULL){
-    //         printf("args[%d] = %s\n",i,args[i]);
-    //         ++i;
-    //     }
-    // }
-    
+    // Pipe opening
+    int pipe = open("/tmp/period.fifo",O_WRONLY);
+    if(pipe == -1){
+        perror("open");
+        return 2;
+    }
+
+    // Send the command's information
+    send_command(pipe,pid_period,cmd,args,start,period);
+
     return 0;           
 }
