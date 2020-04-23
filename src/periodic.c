@@ -27,18 +27,29 @@ int get_period_pid(){
     }
 
     // Read the pid
-    pid_t pid;
-    int n = fread(&pid,sizeof(pid_t),1,file);
+    char buf[8] = "";
+    int n = fread(buf,sizeof(char),8,file);
     if(n == -1){ // Error while reading
         perror("read");
+        if(fclose(file) == -1){
+            perror("fclose");
+        }
         return -1;
     }
 
     if(!n){ // Nothing to read
         fprintf(stderr,"> Error [get_period_pid] - '/tmp/period.pid' is empty\n");
+        if(fclose(file) == -1){
+            perror("fclose");
+        }
         return -1;
     }
-    return pid;
+
+    if(fclose(file) == -1){
+        perror("fclose");
+    }
+
+    return atoi(buf);
 }
 
 /**
@@ -113,29 +124,33 @@ int check_args(int argc, char *argv[], int *start, int *period, char **cmd, char
 
     return 0;
 
-
-
 }
+
+
+
 
 int main(int argc, char *argv[]){
 
-    int start = -1, period = -1;
-    char *cmd = NULL;
-    char **args = NULL;
-    if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
-        return 1;
-    }
+    printf("pid : %d\n",get_period_pid());
+    
 
-    if(argc != 1){
-        printf("start = %i\n",start);
-        printf("period = %d\n",period);
-        printf("command = %s\n",cmd);
-        int i =0;
-        while(args[i] != NULL){
-            printf("args[%d] = %s\n",i,args[i]);
-            ++i;
-        }
-    }
+    // int start = -1, period = -1;
+    // char *cmd = NULL;
+    // char **args = NULL;
+    // if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
+    //     return 1;
+    // }
+
+    // if(argc != 1){
+    //     printf("start = %i\n",start);
+    //     printf("period = %d\n",period);
+    //     printf("command = %s\n",cmd);
+    //     int i =0;
+    //     while(args[i] != NULL){
+    //         printf("args[%d] = %s\n",i,args[i]);
+    //         ++i;
+    //     }
+    // }
     
     return 0;           
 }
