@@ -4,29 +4,30 @@
 
 
 int main(){
-    struct list cmd_list;
-    list_create(&cmd_list);
+    struct array cmd_array;
+    array_create(&cmd_array);
 
     struct command cmd;
+
+    char *args[3];
+    args[0] = "echo";
+    args[1] = "Bonjour";
+    args[2] = NULL;
     
-    command_create(&cmd,"sleep",NULL,20,1000);
-    list_add(&cmd_list,cmd);
+    command_create(&cmd,1,"sleep",args,20,1000);
+    array_add(&cmd_array,cmd);
 
-    command_create(&cmd,"echo",NULL,30,0);
-    list_add(&cmd_list,cmd);
+    command_create(&cmd,2,"echo",args,30,0);
+    array_add(&cmd_array,cmd);
 
-    command_create(&cmd,"tar",NULL,300,87687987);
-    list_add(&cmd_list,cmd);
+    command_create(&cmd,3,"tar",args,300,87687987);
+    array_add(&cmd_array,cmd);
 
-    list_print(&cmd_list);
+    array_print(&cmd_array);
 
-    command_print(list_getNext(&cmd_list));
+   
 
-    list_print(&cmd_list);
-
-    command_print(list_getNext(&cmd_list));
-
-    list_destroy(&cmd_list);
+    array_destroy(&cmd_array);
 
     return 0;
 }

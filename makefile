@@ -5,7 +5,9 @@ OBJDIR=object
 
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
-all : period periodic
+all : period periodic test_libcommand test_libmessage 
+
+
 
 periodic : $(OBJDIR)/periodic.o libmessage.so libcommand.so
 	@echo make : $@

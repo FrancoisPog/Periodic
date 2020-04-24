@@ -188,8 +188,11 @@ int main(){
 
     while(1){
         if(usr1){
+            // When usr1
             struct command cmd;
+            // Receive command from periodic
             recv_command(pipe,&cmd,count++);
+            // Add command in array
             array_add(&commands_list,cmd);
             array_print(&commands_list);
         }

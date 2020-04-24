@@ -139,22 +139,27 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
  */ 
 int send_command(int pipe,int pid,char *cmd, char **args, time_t start, int period){
 
+    // Send the USR1 signal to perido
     kill(pid,SIGUSR1);
 
+    // Write the start timestamp in the pipe
     if(write(pipe,&start,sizeof(time_t)) == -1){
         perror("fwrite");
         return -1;
     }
 
+    // Write the period in the pipe
     if(write(pipe,&period,sizeof(int)) == -1){
         perror("fwrite");
         return -1;
     }
 
+    // Write the command name in the pipe
     if(send_string(pipe,cmd) == -1){
         return -1;
     }
 
+    // Write the command arguments in the pipe
     if(send_argv(pipe,args) == -1){
         return -1;
     }

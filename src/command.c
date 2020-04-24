@@ -6,6 +6,9 @@
 // COMMAND
 
 void command_create(struct command *self,size_t id, char *name, char **args, int period, time_t start){
+    if(self == NULL || name == NULL || args == NULL){
+        return;
+    }
     self->id = id;
     self->name = name;
     self->args = args;
@@ -15,6 +18,9 @@ void command_create(struct command *self,size_t id, char *name, char **args, int
 
 
 void command_print(struct command *self){
+    if(self == NULL){
+        return;
+    }
     
     printf("< [%zd] %li | %i | %s ",self->id,self->next,self->period,self->name);
     size_t i = 0;
@@ -73,6 +79,9 @@ void array_remove(struct array *self){
 
 
 void array_print(struct array *self){
+    if(self == NULL){
+        return;
+    }
     
    for(size_t i = 0 ; i < self->size ; ++i){
        command_print(&(self->data[i]));
