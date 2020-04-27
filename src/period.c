@@ -140,6 +140,65 @@ int recv_command(int pipe, struct command *cmd, size_t id){
     return 0;
 }
 
+/**
+ * Send the array of command to periodic
+ */ 
+int send_command_array(int pipe, struct array commands_list){
+
+    char** list = calloc(commands_list.size,sizeof(char*));
+
+    for (size_t i = 0; i < commands_list.size ; i++){
+
+        // Get the argv length
+        size_t size = 0;
+        while(commands_list.data->args[size++] != NULL){}
+        size--;
+
+        char* str ="";
+        for(size_t i = 0 ; i < size ; ++i){
+            strcat(str,commands_list.data->args[i]);
+        }
+        
+        sprintf(str , "%li %s %s %i %li", commands_list.data->id, commands_list.data->name, str, commands_list.data->period, commands_list.data->next);
+        /*
+        if(send_string(pipe,str) == -1){
+            return -1;
+        }*/
+        strcpy(list[i], str);
+    /*
+        // Write the id in the pipe
+        if(write(pipe,&commands_list.data->id,sizeof(size_t)) == -1){
+            perror("write");
+            return -1;
+        }
+
+        // Write the command name in the pipe
+        if(send_string(pipe,commands_list.data->name) == -1){
+            return -1;
+        }
+
+        // Write the command arguments in the pipe
+        if(send_argv(pipe,commands_list.data->args) == -1){
+            return -1;
+        }
+
+        // Write the period in the pipe
+        if(write(pipe,&commands_list.data->period,sizeof(int)) == -1){
+            perror("write");
+            return -1;
+        }
+
+        //
+        if(write(pipe,&commands_list.data->next,sizeof(time_t)) == -1){
+            perror("write");
+            return -1;
+        }*/
+
+    }
+    send_argv(pipe,list);
+
+    return 0;
+}
 
 // MAIN 
 int main(){
@@ -196,6 +255,13 @@ int main(){
             array_add(&commands_list,cmd);
             array_print(&commands_list);
         }
+        if (usr2){
+            // When usr2
+            //send the list of commands to periodic
+            send_command_array(pipe,commands_list);
+            usr2=0;
+        }
+        
         pause();
     }
 

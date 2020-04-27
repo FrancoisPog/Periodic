@@ -16,7 +16,6 @@ void command_create(struct command *self,size_t id, char *name, char **args, int
     self->period = period;
 }
 
-
 void command_print(struct command *self){
     if(self == NULL){
         return;
@@ -30,7 +29,7 @@ void command_print(struct command *self){
     printf(" >\n");
 }
 
-// COMMAND
+// ARRAY
 
 void array_create(struct array *self){
     if(self == NULL){
@@ -73,7 +72,7 @@ void array_add(struct array *self, struct command cmd){
 }
 
 void array_remove(struct array *self){
-
+    //bonus
 }
 
 

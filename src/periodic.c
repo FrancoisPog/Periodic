@@ -58,8 +58,6 @@ int get_period_pid(){
 
 
 
-
-
 /**
  * Check the arguments and determine the start, the period, the command and its arguments.  
  * Return :
@@ -139,7 +137,7 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
  */ 
 int send_command(int pipe,int pid,char *cmd, char **args, time_t start, int period){
 
-    // Send the USR1 signal to perido
+    // Send the USR1 signal to period
     kill(pid,SIGUSR1);
 
     // Write the start timestamp in the pipe
@@ -167,6 +165,23 @@ int send_command(int pipe,int pid,char *cmd, char **args, time_t start, int peri
     return 0;
 }
 
+/**
+ * Receive a command from periodic
+ */ 
+int recv_command_array(int pipe){
+    char** list = recv_argv(pipe);
+
+    size_t size = 0;
+    while(list[size++] != NULL){}
+    size--;
+    
+    for (size_t i = 0; i < size; i++){
+        printf("%s\n",list[i]);
+    }
+    
+    
+    return 0;
+}
 
 
 // MAIN
@@ -194,8 +209,15 @@ int main(int argc, char *argv[]){
         return 2;
     }
 
-    // Send the command's information
-    send_command(pipe,pid_period,cmd,args,start,period);
+    //if periodic used alone -> get command list
+    if(argc == 1){
+        // Send the USR2 signal to period
+        kill(pid_period,SIGUSR2);
+    }else{
+        // Send the command's information
+        send_command(pipe,pid_period,cmd,args,start,period);
+    }
+    
 
     return 0;           
 }
