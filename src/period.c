@@ -136,7 +136,7 @@ int recv_command(int pipe, struct command *cmd, size_t id){
     cmd->name = name;
     cmd->args = args;
 
-    usr1 = 0;
+    
     return 0;
 }
 
@@ -154,7 +154,7 @@ int send_command_array(int pipe, struct array commands_list){
         while(commands_list.data->args[size++] != NULL){}
         size--;
 
-        char* str ="";
+        char* str =""; // Mauvaise allocation
         for(size_t i = 0 ; i < size ; ++i){
             strcat(str,commands_list.data->args[i]);
         }
@@ -164,7 +164,7 @@ int send_command_array(int pipe, struct array commands_list){
         if(send_string(pipe,str) == -1){
             return -1;
         }*/
-        strcpy(list[i], str);
+        strcpy(list[i], str); // list[i] = str
     /*
         // Write the id in the pipe
         if(write(pipe,&commands_list.data->id,sizeof(size_t)) == -1){
@@ -254,11 +254,12 @@ int main(){
             // Add command in array
             array_add(&commands_list,cmd);
             array_print(&commands_list);
+            usr1 = 0;
         }
         if (usr2){
             // When usr2
             //send the list of commands to periodic
-            send_command_array(pipe,commands_list);
+            send_command_array(pipe,commands_list); // fermer et réouvrir le pipe en lecture pour pouvoir écrire
             usr2=0;
         }
         

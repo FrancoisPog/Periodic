@@ -7,8 +7,6 @@ OBJDIR=object
 
 all : period periodic test_libcommand test_libmessage 
 
-
-
 periodic : $(OBJDIR)/periodic.o libmessage.so libcommand.so
 	@echo make : $@
 	@gcc -L${PWD} $< -lmessage -lcommand -o $@
