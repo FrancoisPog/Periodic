@@ -151,49 +151,34 @@ int send_command_array(int pipe, struct array commands_list){
 
         // Get the argv length
         size_t size = 0;
-        while(commands_list.data->args[size++] != NULL){}
+        size_t buffsize = 4 + 10 + 7 + strlen(commands_list.data->name);
+
+        while(commands_list.data[i]->args[size++] != NULL){
+            buffsize+=strlen(commands_list.data->args[size-1]);
+        }
         size--;
 
-        char* str ="";
+        
+        //char str[buffsize];
+        buff = calloc(buffsize,sizeof(char));
+
+        //write the command in the buffer
+        sprintf(buff,"%d %d %li %s",commands_list.data->id,commands_list.data->period,commands_list.data->next,commands_list.data->name);
+
+        //write the command's arguments in the buffer
+        for(size_t i = 0 ; i < size ; ++i){
+            strcat(buff,commands_list.data->args[i]);
+        }
+
+        /*
         for(size_t i = 0 ; i < size ; ++i){
             strcat(str,commands_list.data->args[i]);
         }
         
         sprintf(str , "%li %s %s %i %li", commands_list.data->id, commands_list.data->name, str, commands_list.data->period, commands_list.data->next);
-        /*
-        if(send_string(pipe,str) == -1){
-            return -1;
-        }*/
         strcpy(list[i], str);
-    /*
-        // Write the id in the pipe
-        if(write(pipe,&commands_list.data->id,sizeof(size_t)) == -1){
-            perror("write");
-            return -1;
-        }
-
-        // Write the command name in the pipe
-        if(send_string(pipe,commands_list.data->name) == -1){
-            return -1;
-        }
-
-        // Write the command arguments in the pipe
-        if(send_argv(pipe,commands_list.data->args) == -1){
-            return -1;
-        }
-
-        // Write the period in the pipe
-        if(write(pipe,&commands_list.data->period,sizeof(int)) == -1){
-            perror("write");
-            return -1;
-        }
-
-        //
-        if(write(pipe,&commands_list.data->next,sizeof(time_t)) == -1){
-            perror("write");
-            return -1;
-        }*/
-
+        */
+        list[i] = buff;
     }
     send_argv(pipe,list);
 
