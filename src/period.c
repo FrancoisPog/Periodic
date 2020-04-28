@@ -153,17 +153,17 @@ int send_command_array(int pipe, struct array commands_list){
         size_t size = 0;
         size_t buffsize = 4 + 10 + 7 + strlen(commands_list.data->name);
 
-        while(commands_list.data[i]->args[size++] != NULL){
+        while(commands_list.data[i].args[size++] != NULL){
             buffsize+=strlen(commands_list.data->args[size-1]);
         }
         size--;
 
         
         //char str[buffsize];
-        buff = calloc(buffsize,sizeof(char));
+        char *buff = calloc(buffsize,sizeof(char));
 
         //write the command in the buffer
-        sprintf(buff,"%d %d %li %s",commands_list.data->id,commands_list.data->period,commands_list.data->next,commands_list.data->name);
+        sprintf(buff,"%ld %d %li %s",commands_list.data->id,commands_list.data->period,commands_list.data->next,commands_list.data->name);
 
         //write the command's arguments in the buffer
         for(size_t i = 0 ; i < size ; ++i){
@@ -178,6 +178,8 @@ int send_command_array(int pipe, struct array commands_list){
         sprintf(str , "%li %s %s %i %li", commands_list.data->id, commands_list.data->name, str, commands_list.data->period, commands_list.data->next);
         strcpy(list[i], str);
         */
+
+        //add the command in the command list
         list[i] = buff;
     }
     send_argv(pipe,list);
