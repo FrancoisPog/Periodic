@@ -10,6 +10,10 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/wait.h>
+#include <assert.h>
+
+
 
 /**
  * Check if period is already running, otherwise create /tmp/period.pid and write the pid inside
@@ -90,6 +94,7 @@ int make_dir(){
 
 volatile sig_atomic_t usr1 = 0;
 volatile sig_atomic_t usr2 = 0;
+volatile sig_atomic_t alrm = 0;
 
 /**
  * Handler for SIGUSR1 and SIGUSR2
@@ -97,10 +102,16 @@ volatile sig_atomic_t usr2 = 0;
 void hand_sigusr(int sig){
     if(sig == SIGUSR1){
         usr1 = 1;
-    }else{
+    }else if(sig == SIGUSR2){
         usr2 = 1;
+    }else if(sig == SIGALRM){
+        alrm = 1;
     }
 }
+
+
+
+
 
 /**
  * Receive a command from periodic
@@ -155,24 +166,73 @@ int recv_command(struct command *cmd, size_t id){
     return 0;
 }
 
-int add_command(struct command cmd, struct array *list){
-    array_add(&commands_list,cmd);
-
-    // Si start = now executer la commande
-    // Programmer une alarme si cette commande est la prochaine
+/**
+ * Execute a command
+ */ 
+int execute_command(struct command cmd){
     
+    pid_t pid = fork();
+    if(pid == 0){
+        execvp(cmd.name,cmd.args);
+        perror("execvp");
+        exit(1);
+    }
 
     return 0;
 }
 
-int search_and_execute_commands(struct array *list){
-    // Parcourir la liste et stocker les indices des commandes à executer, puis les executer
-    // Reprogrammer une alarme pour la prochaine commande 
+/**
+ * Set an alarm for the next command to execute
+ */ 
+int set_alarm(struct array *list){
+    int next_cmd_index = 0;
+    for(size_t i = 1 ; i < list->size ; ++i){
+        if(list->data[i].next < list->data[next_cmd_index].next){
+            next_cmd_index = i;
+        }
+    }
+    unsigned int timer =  list->data[next_cmd_index].next - time(NULL);
+    // printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
+    alarm(timer);
+
+    return 0;
 }
 
-int execute_command(struct command cmd){
-    // Executer une commande 
+/**
+ * Add a command in the list and set alarm
+ */ 
+int add_command(struct command cmd, struct array *list){
+
+    if(time(NULL) == cmd.next){
+        execute_command(cmd);
+        cmd.next += cmd.period;
+    }
+    array_add(list,cmd);
+    set_alarm(list);
+    return 0;
 }
+
+/**
+ * Execute the next command(s) to execute and set an alarm after
+ */ 
+int search_and_execute_commands(struct array *list){
+    int nothing_to_execute = 1;
+    for(size_t i = 0 ; i < list->size ; ++i ){
+        if(list->data[i].next == time(NULL)){
+            execute_command(list->data[i]);
+            list->data[i].next += list->data[i].period;
+            nothing_to_execute = 0;
+        }
+    }
+    assert(!nothing_to_execute);
+
+    set_alarm(list);
+
+    return 0;
+}
+
+
+
 
 /**
  * Send the array of command to periodic
@@ -292,9 +352,14 @@ int main(){
         perror("sigaction");
         return 5;
     }
+    if(sigaction(SIGALRM,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+    
 
     // Creation commands list
-    size_t count = 55555;
+    size_t count = 0;
     struct array commands_list;
     array_create(&commands_list);
 
@@ -312,17 +377,22 @@ int main(){
             usr1 = 0;
         }
         if (usr2){
+
             if(send_command_array(commands_list) == -1){
                 return 7;
             }
             usr2=0; 
         }
+
+        if(alrm){
+            search_and_execute_commands(&commands_list);
+            alrm = 0;
+        }
+        
     }
 
     
-    array_destroy(&commands_list);
-    unlink("/tmp/period.fifo");
-    unlink("/tmp/period.pid");
+    
      
     return 0;
 }
