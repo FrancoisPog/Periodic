@@ -105,7 +105,17 @@ void hand_sigusr(int sig){
 /**
  * Receive a command from periodic
  */ 
-int recv_command(int pipe, struct command *cmd, size_t id){
+int recv_command(struct command *cmd, size_t id){
+    
+    int pipe = open("/tmp/period.fifo",O_RDONLY);
+    if(pipe == -1){
+        perror("open");
+        return 4;
+    }
+    printf("> Pipe opened [RD]\n");
+    
+
+
     time_t start;
     int n = read(pipe,&start,sizeof(time_t));
     if(n <= 0){
@@ -136,75 +146,120 @@ int recv_command(int pipe, struct command *cmd, size_t id){
     cmd->name = name;
     cmd->args = args;
 
+    if(close(pipe) == -1){
+        perror("close");
+        return -1;
+    }
+    printf("> Pipe closed\n");
     
     return 0;
+}
+
+int add_command(struct command cmd, struct array *list){
+    array_add(&commands_list,cmd);
+
+    // Si start = now executer la commande
+    // Programmer une alarme si cette commande est la prochaine
+    
+
+    return 0;
+}
+
+int search_and_execute_commands(struct array *list){
+    // Parcourir la liste et stocker les indices des commandes à executer, puis les executer
+    // Reprogrammer une alarme pour la prochaine commande 
+}
+
+int execute_command(struct command cmd){
+    // Executer une commande 
 }
 
 /**
  * Send the array of command to periodic
  */ 
-int send_command_array(int pipe, struct array commands_list){
+int send_command_array(struct array commands_list){
 
-    char** list = calloc(commands_list.size,sizeof(char*));
+    int pipe = open("/tmp/period.fifo",O_WRONLY);
+    if(pipe == -1){
+        perror("open");
+        return -1;
+    }
+    printf("> Pipe opened [WR]\n");
+
+    if(commands_list.size == 0){
+        char **tmp = calloc(2,sizeof(char*));
+        if(tmp == NULL){
+            perror("calloc");
+            close(pipe);
+            return -1;
+        }
+        tmp[0] = "No command in the list";
+        tmp[1] = NULL;
+        send_argv(pipe,tmp);
+        free(tmp);
+        close(pipe);
+        printf("> Pipe closed\n");
+        return 0;
+    }
+    
+
+    char** list = calloc(commands_list.size+1,sizeof(char*));
+    if(list == NULL){
+        perror("calloc");
+        close(pipe);
+        return -1;
+    }
 
     for (size_t i = 0; i < commands_list.size ; i++){
-
         // Get the argv length
-        size_t size = 0;
-        size_t buffsize = 4 + 10 + 7 + strlen(commands_list.data->name);
+        size_t index = 0;
+        size_t buffsize = 8 + 5 + 10 + 7 + strlen(commands_list.data[i].name);
 
-<<<<<<< HEAD
-        char* str =""; // Mauvaise allocation
-        for(size_t i = 0 ; i < size ; ++i){
-            strcat(str,commands_list.data->args[i]);
-=======
-        while(commands_list.data[i].args[size++] != NULL){
-            buffsize+=strlen(commands_list.data->args[size-1]);
->>>>>>> 247040c09ea07edf774d9aadb4cb4947fad4e6d8
+        while(commands_list.data[i].args[index] != NULL){
+            buffsize += strlen(commands_list.data[i].args[index])+1;
+            index++;
         }
-        size--;
-
-        
-<<<<<<< HEAD
-        sprintf(str , "%li %s %s %i %li", commands_list.data->id, commands_list.data->name, str, commands_list.data->period, commands_list.data->next);
-        /*
-        if(send_string(pipe,str) == -1){
-            return -1;
-        }*/
-        strcpy(list[i], str); // list[i] = str
-    /*
-        // Write the id in the pipe
-        if(write(pipe,&commands_list.data->id,sizeof(size_t)) == -1){
-            perror("write");
-            return -1;
-        }
-=======
-        //char str[buffsize];
+                
         char *buff = calloc(buffsize,sizeof(char));
->>>>>>> 247040c09ea07edf774d9aadb4cb4947fad4e6d8
+        if(buff == NULL){
+            perror("calloc");
+            close(pipe);
+            return -1;
+        }
 
         //write the command in the buffer
-        sprintf(buff,"%ld %d %li %s",commands_list.data->id,commands_list.data->period,commands_list.data->next,commands_list.data->name);
+        sprintf(buff,"- [%ld] %li %d %s ",commands_list.data[i].id,commands_list.data[i].next,commands_list.data[i].period,commands_list.data[i].name);
 
         //write the command's arguments in the buffer
-        for(size_t i = 0 ; i < size ; ++i){
-            strcat(buff,commands_list.data->args[i]);
+        for(size_t k = 0 ; k < index ; ++k){
+            strcat(buff,commands_list.data[i].args[k]);
+            if(k != index-1){
+                strcat(buff," ");
+            }
+            
         }
 
-        /*
-        for(size_t i = 0 ; i < size ; ++i){
-            strcat(str,commands_list.data->args[i]);
-        }
-        
-        sprintf(str , "%li %s %s %i %li", commands_list.data->id, commands_list.data->name, str, commands_list.data->period, commands_list.data->next);
-        strcpy(list[i], str);
-        */
 
         //add the command in the command list
         list[i] = buff;
     }
-    send_argv(pipe,list);
 
+    if(send_argv(pipe,list) == -1){
+        close(pipe);
+        return -1;
+    }
+
+    for(size_t i = 0 ; i < commands_list.size ; ++i){
+        free(list[i]);
+    }
+    free(list);
+
+    if(close(pipe) == -1){
+        perror("close");
+        return -1;
+    }
+    printf("> Pipe closed\n");
+    
     return 0;
 }
 
@@ -239,39 +294,29 @@ int main(){
     }
 
     // Creation commands list
-    size_t count = 0;
+    size_t count = 55555;
     struct array commands_list;
     array_create(&commands_list);
 
-
-
-
-    // Open pipe
-    int pipe = open("/tmp/period.fifo",O_RDONLY);
-    if(pipe == -1){
-        perror("open");
-        return 4;
-    }
-
     while(1){
+        pause();
         if(usr1){
             // When usr1
             struct command cmd;
             // Receive command from periodic
-            recv_command(pipe,&cmd,count++);
+            if(recv_command(&cmd,count++) == -1){
+                return 6;
+            }
             // Add command in array
-            array_add(&commands_list,cmd);
-            array_print(&commands_list);
+            add_command(cmd,&commands_list);
             usr1 = 0;
         }
         if (usr2){
-            // When usr2
-            //send the list of commands to periodic
-            send_command_array(pipe,commands_list); // fermer et réouvrir le pipe en lecture pour pouvoir écrire
-            usr2=0;
+            if(send_command_array(commands_list) == -1){
+                return 7;
+            }
+            usr2=0; 
         }
-        
-        pause();
     }
 
     

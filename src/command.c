@@ -59,7 +59,7 @@ void array_add(struct array *self, struct command cmd){
     }
 
     if(self->size == self->capacity){
-		self->capacity *= 2;
+		self->capacity *= 10;
 		struct command *data = calloc(self->capacity, sizeof(struct command));
 		memcpy(data, self->data, self->size * sizeof(struct command));
 		free(self->data);
