@@ -16,6 +16,22 @@ void command_create(struct command *self,size_t id, char *name, char **args, int
     self->period = period;
 }
 
+void command_destroy(struct command *self){
+    self->id = 0;
+    free(self->name);
+    self->name = NULL;
+    size_t i = 0;
+    while(self->args[i] != NULL){
+        free(self->args[i]);
+        self->args[i] = NULL;
+        i++;
+    }
+    free(self->args);
+    self->args = NULL;
+    self->next = 0;
+    self->period = 0;
+}
+
 void command_print(struct command *self){
     if(self == NULL){
         return;
@@ -46,7 +62,10 @@ void array_destroy(struct array *self){
     if(self == NULL){
         return;
     }
-
+    
+    for(size_t i = 0; i < self->size ; ++i){
+        command_destroy(&(self->data[i]));
+    }
     free(self->data);
     self->data = NULL;
     self->capacity = 0;

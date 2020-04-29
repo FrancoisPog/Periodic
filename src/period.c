@@ -167,14 +167,75 @@ int recv_command(struct command *cmd, size_t id){
 }
 
 /**
+ * Redirects the standards file descriptor
+ */ 
+int redirection(char type,size_t cmdId){
+    if(type != 'i' && type != 'o' && type != 'e'){
+        return -1;
+    }
+
+    int fd = -1;
+    char buf[23];
+    switch(type){
+        case 'i' : {
+            sprintf(buf,"/dev/null");
+            fd = STDIN_FILENO;
+            break;
+        }
+        case 'o' : {
+            sprintf(buf,"/tmp/period/%zd.out",cmdId);
+            fd = STDOUT_FILENO;
+            break;
+        }
+        case 'e' : {
+            sprintf(buf,"/tmp/period/%zd.err",cmdId);
+            fd = STDERR_FILENO;
+            break;
+        }
+        default : {
+            assert(0);
+        }
+    }
+    assert(fd != -1);
+
+    int out = open(buf,O_WRONLY | O_CREAT | O_APPEND,0755);
+    if(out == -1){
+        perror("open");
+        exit(1);
+    }
+
+    if(dup2(out, fd) == -1){
+        perror("dup2");
+        exit(2);
+    }
+
+    if(close(out) == -1){
+        perror("close");
+        exit(3);
+    }
+
+    return 0;
+}
+
+
+/**
  * Execute a command
  */ 
-int execute_command(struct command cmd){
+int execute_command(struct command cmd, struct array *list){
     
     pid_t pid = fork();
     if(pid == 0){
+
+        
+       
+        redirection('o',cmd.id);
+        redirection('e',cmd.id);
+        redirection('i',cmd.id);
+        
+
         execvp(cmd.name,cmd.args);
         perror("execvp");
+        array_destroy(list);
         exit(1);
     }
 
@@ -194,7 +255,7 @@ int set_alarm(struct array *list){
     unsigned int timer =  list->data[next_cmd_index].next - time(NULL);
     // printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
     alarm(timer);
-
+    
     return 0;
 }
 
@@ -204,7 +265,9 @@ int set_alarm(struct array *list){
 int add_command(struct command cmd, struct array *list){
 
     if(time(NULL) == cmd.next){
-        execute_command(cmd);
+        if(execute_command(cmd,list) == -1){
+            return -1;
+        }
         cmd.next += cmd.period;
     }
     array_add(list,cmd);
@@ -219,7 +282,9 @@ int search_and_execute_commands(struct array *list){
     int nothing_to_execute = 1;
     for(size_t i = 0 ; i < list->size ; ++i ){
         if(list->data[i].next == time(NULL)){
-            execute_command(list->data[i]);
+            if(execute_command(list->data[i], list) == -1){
+                return -1;
+            }
             list->data[i].next += list->data[i].period;
             nothing_to_execute = 0;
         }
@@ -385,7 +450,9 @@ int main(){
         }
 
         if(alrm){
-            search_and_execute_commands(&commands_list);
+            if(search_and_execute_commands(&commands_list) == -1){
+                return -1;
+            }
             alrm = 0;
         }
         
