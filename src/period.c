@@ -95,17 +95,26 @@ int make_dir(){
 volatile sig_atomic_t usr1 = 0;
 volatile sig_atomic_t usr2 = 0;
 volatile sig_atomic_t alrm = 0;
+volatile sig_atomic_t launched = 0;
+volatile sig_atomic_t killed = 0;
+volatile sig_atomic_t chld = 0;
+volatile sig_atomic_t stop = 0;
+
 
 /**
  * Handler for SIGUSR1 and SIGUSR2
  */
 void hand_sigusr(int sig){
     if(sig == SIGUSR1){
-        usr1 = 1;
+        usr1++;
     }else if(sig == SIGUSR2){
-        usr2 = 1;
+        usr2 ++;
     }else if(sig == SIGALRM){
-        alrm = 1;
+        alrm ++;
+    }else if(sig == SIGCHLD){
+        chld++;
+    }else if(sig == SIGINT){
+        stop = 1;
     }
 }
 
@@ -228,9 +237,9 @@ int execute_command(struct command cmd, struct array *list){
 
         
        
-        redirection('o',cmd.id);
-        redirection('e',cmd.id);
-        redirection('i',cmd.id);
+        // redirection('o',cmd.id);
+        // redirection('e',cmd.id);
+        // redirection('i',cmd.id);
         
 
         execvp(cmd.name,cmd.args);
@@ -238,7 +247,7 @@ int execute_command(struct command cmd, struct array *list){
         array_destroy(list);
         exit(1);
     }
-
+    launched++;
     return 0;
 }
 
@@ -253,8 +262,13 @@ int set_alarm(struct array *list){
         }
     }
     unsigned int timer =  list->data[next_cmd_index].next - time(NULL);
-    // printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
-    alarm(timer);
+    printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
+    if(timer != 0){
+        alarm(timer);
+    }
+    if(timer < 0){
+        alarm(1);
+    }
     
     return 0;
 }
@@ -264,11 +278,11 @@ int set_alarm(struct array *list){
  */ 
 int add_command(struct command cmd, struct array *list){
 
-    if(time(NULL) == cmd.next){
+    if(time(NULL) <= cmd.next){
         if(execute_command(cmd,list) == -1){
             return -1;
         }
-        cmd.next += cmd.period;
+        cmd.next = time(NULL) + cmd.period;
     }
     array_add(list,cmd);
     set_alarm(list);
@@ -281,11 +295,11 @@ int add_command(struct command cmd, struct array *list){
 int search_and_execute_commands(struct array *list){
     int nothing_to_execute = 1;
     for(size_t i = 0 ; i < list->size ; ++i ){
-        if(list->data[i].next == time(NULL)){
+        if(list->data[i].next <= time(NULL)){
             if(execute_command(list->data[i], list) == -1){
                 return -1;
             }
-            list->data[i].next += list->data[i].period;
+            list->data[i].next = time(NULL) + list->data[i].period;
             nothing_to_execute = 0;
         }
     }
@@ -388,6 +402,20 @@ int send_command_array(struct array commands_list){
     return 0;
 }
 
+void check_zombie(){
+    
+    int wstatus;
+    wait(&wstatus);
+    
+    if (WIFEXITED(wstatus)) {
+        fprintf(stderr,"Normal end, statut :  %d\n", WEXITSTATUS(wstatus));
+    } else if (WIFSIGNALED(wstatus)) {
+        fprintf(stderr,"End by signal n°%d\n", WTERMSIG(wstatus));
+    }
+    killed++;
+    
+}
+
 // MAIN 
 int main(){
     // Initialization
@@ -421,15 +449,37 @@ int main(){
         perror("sigaction");
         return 5;
     }
-    
+    if(sigaction(SIGCHLD,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+
+    if(sigaction(SIGINT,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
 
     // Creation commands list
     size_t count = 0;
     struct array commands_list;
     array_create(&commands_list);
 
-    while(1){
-        pause();
+
+
+    while(!stop){
+        if(usr1 + usr2 + chld + alarm == 0){
+            pause();
+        }
+
+        if(chld){
+            while(chld){
+                printf("aaaaargh\n");
+                check_zombie();
+                chld--;
+            }
+        }
+
+
         if(usr1){
             // When usr1
             struct command cmd;
@@ -439,26 +489,39 @@ int main(){
             }
             // Add command in array
             add_command(cmd,&commands_list);
-            usr1 = 0;
+            usr1--;
         }
         if (usr2){
 
             if(send_command_array(commands_list) == -1){
                 return 7;
             }
-            usr2=0; 
+            usr2--; 
         }
-
+        
         if(alrm){
+            alrm--;
             if(search_and_execute_commands(&commands_list) == -1){
                 return -1;
             }
-            alrm = 0;
+            
         }
+
         
+       
     }
 
+    printf("l:%d k:%d\n",launched,killed);
     
+    while(killed < launched){
+        check_zombie();
+        //sleep(1);
+    }
+
+    printf("l:%d k:%d\n",launched,killed);
+
+    array_destroy(&commands_list);
+    unlink("/tmp/period.pid");
     
      
     return 0;
