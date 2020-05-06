@@ -94,10 +94,14 @@ int make_dir(){
 
 volatile sig_atomic_t usr1 = 0;
 volatile sig_atomic_t usr2 = 0;
-volatile sig_atomic_t alrm = 0;
+
+volatile sig_atomic_t alrm = 0; 
+volatile sig_atomic_t chld = 0;
+
 volatile sig_atomic_t launched = 0;
 volatile sig_atomic_t killed = 0;
-volatile sig_atomic_t chld = 0;
+
+
 volatile sig_atomic_t stop = 0;
 
 
@@ -106,13 +110,13 @@ volatile sig_atomic_t stop = 0;
  */
 void hand_sigusr(int sig){
     if(sig == SIGUSR1){
-        usr1++;
+        usr1 = 1;
     }else if(sig == SIGUSR2){
-        usr2 ++;
+        usr2 = 1;
     }else if(sig == SIGALRM){
-        alrm ++;
+        alrm = 1;
     }else if(sig == SIGCHLD){
-        chld++;
+        chld = 1;
     }else if(sig == SIGINT){
         stop = 1;
     }
@@ -402,18 +406,28 @@ int send_command_array(struct array commands_list){
     return 0;
 }
 
-void check_zombie(){
+int check_zombie(){
     
-    int wstatus;
-    wait(&wstatus);
-    
-    if (WIFEXITED(wstatus)) {
-        fprintf(stderr,"Normal end, statut :  %d\n", WEXITSTATUS(wstatus));
-    } else if (WIFSIGNALED(wstatus)) {
-        fprintf(stderr,"End by signal n°%d\n", WTERMSIG(wstatus));
+    while(1){
+        int wstatus;
+        pid_t pid = waitpid(-1,&wstatus,WNOHANG);
+        if(pid <= 0){
+            if(pid == -1 && errno != ESRCH){
+                perror("waitpid");
+                return -1;
+            }
+            break;
+        }
+        
+        if (WIFEXITED(wstatus)) {
+            fprintf(stderr,"%d : Normal end, statut :  %d\n",pid, WEXITSTATUS(wstatus));
+        } else if (WIFSIGNALED(wstatus)) {
+            fprintf(stderr,"%d : End by signal n°%d\n",pid, WTERMSIG(wstatus));
+        }
+        killed++;
     }
-    killed++;
-    
+
+    return 0;
 }
 
 // MAIN 
@@ -472,11 +486,7 @@ int main(){
         }
 
         if(chld){
-            while(chld){
-                printf("aaaaargh\n");
-                check_zombie();
-                chld--;
-            }
+            check_zombie();
         }
 
 
