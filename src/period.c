@@ -241,10 +241,11 @@ int execute_command(struct command cmd, struct array *list){
 
         
        
-        // redirection('o',cmd.id);
-        // redirection('e',cmd.id);
-        // redirection('i',cmd.id);
+        redirection('o',cmd.id);
+        redirection('e',cmd.id);
+        redirection('i',cmd.id);
         
+
 
         execvp(cmd.name,cmd.args);
         perror("execvp");
@@ -256,63 +257,52 @@ int execute_command(struct command cmd, struct array *list){
 }
 
 /**
- * Set an alarm for the next command to execute
+ * Execute the next command(s) to execute and set an alarm after
  */ 
-int set_alarm(struct array *list){
-    int next_cmd_index = 0;
-    for(size_t i = 1 ; i < list->size ; ++i){
-        if(list->data[i].next < list->data[next_cmd_index].next){
-            next_cmd_index = i;
+int search_and_execute_commands(struct array *list){
+    int timer = 0;
+    size_t next_cmd_index;
+    while(timer <= 0){
+        
+        next_cmd_index = -1;
+        for(size_t i = 0 ; i < list->size ; ++i ){
+            if(list->data[i].next <= time(NULL)){
+                if(execute_command(list->data[i], list) == -1){
+                    return -1;
+                }
+                list->data[i].next = time(NULL) + list->data[i].period;
+              
+            }
+
+            if(next_cmd_index == -1 ||  list->data[i].next < list->data[next_cmd_index].next){
+                next_cmd_index = i;
+            }
+            
+            
         }
+        timer =  list->data[next_cmd_index].next - time(NULL);
     }
-    unsigned int timer =  list->data[next_cmd_index].next - time(NULL);
+
     printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
-    if(timer != 0){
-        alarm(timer);
-    }
-    if(timer < 0){
-        alarm(1);
-    }
     
+
+    alarm((unsigned)timer);
+
     return 0;
 }
+
+
 
 /**
  * Add a command in the list and set alarm
  */ 
 int add_command(struct command cmd, struct array *list){
-
-    if(time(NULL) <= cmd.next){
-        if(execute_command(cmd,list) == -1){
-            return -1;
-        }
-        cmd.next = time(NULL) + cmd.period;
-    }
     array_add(list,cmd);
-    set_alarm(list);
+    search_and_execute_commands(list);
     return 0;
 }
 
-/**
- * Execute the next command(s) to execute and set an alarm after
- */ 
-int search_and_execute_commands(struct array *list){
-    int nothing_to_execute = 1;
-    for(size_t i = 0 ; i < list->size ; ++i ){
-        if(list->data[i].next <= time(NULL)){
-            if(execute_command(list->data[i], list) == -1){
-                return -1;
-            }
-            list->data[i].next = time(NULL) + list->data[i].period;
-            nothing_to_execute = 0;
-        }
-    }
-    assert(!nothing_to_execute);
 
-    set_alarm(list);
-
-    return 0;
-}
 
 
 
@@ -412,7 +402,7 @@ int check_zombie(){
         int wstatus;
         pid_t pid = waitpid(-1,&wstatus,WNOHANG);
         if(pid <= 0){
-            if(pid == -1 && errno != ESRCH){
+            if(pid == -1 && errno != ECHILD){
                 perror("waitpid");
                 return -1;
             }
@@ -478,12 +468,22 @@ int main(){
     struct array commands_list;
     array_create(&commands_list);
 
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set,SIGUSR1);
+    sigaddset(&set,SIGUSR2);
+    sigaddset(&set,SIGALRM);
+    sigaddset(&set,SIGCHLD);
+    sigaddset(&set,SIGTERM);
+
+    sigprocmask(SIG_BLOCK,&set,NULL);
 
 
     while(!stop){
-        if(usr1 + usr2 + chld + alarm == 0){
-            pause();
-        }
+        
+        sigset_t empty_set;
+        sigemptyset(&empty_set);
+        sigsuspend(&empty_set);
 
         if(chld){
             check_zombie();
