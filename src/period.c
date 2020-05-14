@@ -117,7 +117,7 @@ void hand_sigusr(int sig){
         alrm = 1;
     }else if(sig == SIGCHLD){
         chld = 1;
-    }else if(sig == SIGINT){
+    }else if(sig == SIGINT || sig == SIGTERM || sig == SIGQUIT){
         stop = 1;
     }
 }
@@ -463,6 +463,16 @@ int main(){
         return 5;
     }
 
+    if(sigaction(SIGTERM,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+
+    if(sigaction(SIGQUIT,&sig_usr,NULL) == -1){
+        perror("sigaction");
+        return 5;
+    }
+
     // Creation commands list
     size_t count = 0;
     struct array commands_list;
@@ -474,7 +484,9 @@ int main(){
     sigaddset(&set,SIGUSR2);
     sigaddset(&set,SIGALRM);
     sigaddset(&set,SIGCHLD);
+    sigaddset(&set,SIGINT);
     sigaddset(&set,SIGTERM);
+    sigaddset(&set,SIGQUIT);
 
     sigprocmask(SIG_BLOCK,&set,NULL);
 
@@ -525,7 +537,6 @@ int main(){
     
     while(killed < launched){
         check_zombie();
-        //sleep(1);
     }
 
     printf("l:%d k:%d\n",launched,killed);
