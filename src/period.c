@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 1
+#define _XOPEN_SOURCE 500
 #include "message.h"
 #include "command.h"
 #include <stdio.h>
@@ -120,6 +121,8 @@ void hand_sigusr(int sig){
     }else if(sig == SIGINT || sig == SIGTERM || sig == SIGQUIT){
         stop = 1;
     }
+
+    
 }
 
 
@@ -235,12 +238,30 @@ int redirection(char type,size_t cmdId){
  * Execute a command
  */ 
 int execute_command(struct command cmd, struct array *list){
-    
+   // pid_t period_pid = getpid();
+    //printf("period_pgid : %d\n",getpgid(period_pid));
     pid_t pid = fork();
+    
     if(pid == 0){
 
+        setpgid(0,getpgid(getppid()));
+        //printf("pid : %d, pgid , period_pgid : %d, child_pgid : %d\n", getpid(),getpgid(getppid()), getpgid(0));
+
+        sigset_t empty;
+        sigemptyset(&empty);
+        sigprocmask(SIG_SETMASK,&empty,NULL);
+
+        struct sigaction dflt;
+        sigemptyset(&dflt.sa_mask);
+        dflt.sa_handler = SIG_DFL;
+        dflt.sa_flags = 0;
+
         
-       
+
+        sigaction(SIGTERM,&dflt,NULL);
+        sigaction(SIGINT,&dflt,NULL);
+        sigaction(SIGQUIT,&dflt,NULL);
+
         redirection('o',cmd.id);
         redirection('e',cmd.id);
         redirection('i',cmd.id);
@@ -266,15 +287,17 @@ int search_and_execute_commands(struct array *list){
         
         next_cmd_index = -1;
         for(size_t i = 0 ; i < list->size ; ++i ){
-            if(list->data[i].next <= time(NULL)){
+            if(list->data[i].next <= time(NULL) && list->data[i].next != 0){
                 if(execute_command(list->data[i], list) == -1){
                     return -1;
                 }
                 list->data[i].next = time(NULL) + list->data[i].period;
-              
+                if(list->data[i].period == 0){
+                    list->data[i].next = 0;
+                }
             }
 
-            if(next_cmd_index == -1 ||  list->data[i].next < list->data[next_cmd_index].next){
+            if(next_cmd_index == -1 ||  (list->data[i].next < list->data[next_cmd_index].next && list->data[i].next != 0)){
                 next_cmd_index = i;
             }
             
@@ -344,6 +367,10 @@ int send_command_array(struct array commands_list){
     }
 
     for (size_t i = 0; i < commands_list.size ; i++){
+        if(commands_list.data[i].next == 0){
+            continue;
+        }
+
         // Get the argv length
         size_t index = 0;
         size_t buffsize = 8 + 5 + 10 + 7 + strlen(commands_list.data[i].name);
@@ -490,17 +517,23 @@ int main(){
 
     sigprocmask(SIG_BLOCK,&set,NULL);
 
+    sigset_t empty_set;
+    sigemptyset(&empty_set);
 
     while(!stop){
         
-        sigset_t empty_set;
-        sigemptyset(&empty_set);
+        
         sigsuspend(&empty_set);
+
+        
 
         if(chld){
             check_zombie();
         }
 
+        if(stop){
+            break;
+        }
 
         if(usr1){
             // When usr1
@@ -532,12 +565,20 @@ int main(){
         
        
     }
+    alarm(0);
 
     printf("l:%d k:%d\n",launched,killed);
+
+    printf("kill:%d\n",kill(0,SIGTERM));
+
+    sleep(1);
+
     
-    while(killed < launched){
+
+    //while(launched > killed){
         check_zombie();
-    }
+    //}
+
 
     printf("l:%d k:%d\n",launched,killed);
 

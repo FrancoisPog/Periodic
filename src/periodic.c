@@ -81,30 +81,36 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
     }
 
     // Get the start value
-    int fromNow = 0;
     char **endptr = calloc(1,sizeof(char *));
-    if(argv[1][0] == '+'){
-        *start = strtol(argv[1]+1,endptr,10);
-        fromNow = 1;
+
+
+    if(strcmp(argv[1],"now") == 0){
+        *start = time(NULL);
     }else{
-        *start = strtol(argv[1],endptr,10);
-    }
+        int fromNow = 0;
+        if(argv[1][0] == '+'){
+            *start = strtol(argv[1]+1,endptr,10);
+            fromNow = 1;
+        }else{
+            *start = strtol(argv[1],endptr,10);
+        }
 
-    if(*endptr != argv[1]+strlen(argv[1])){
-        free(endptr);
-        fprintf(stderr,"Error : Invalid start format\n%s\n",usage);
-        return -1;
-    }
-    
-    time_t now = time(NULL);
-    if(fromNow){
-        *start += now;
-    }
+        if(*endptr != argv[1]+strlen(argv[1])){
+            free(endptr);
+            fprintf(stderr,"Error : Invalid start format\n%s\n",usage);
+            return -1;
+        }
+        
+        time_t now = time(NULL);
+        if(fromNow){
+            *start += now;
+        }
 
-    if(*start < now){
-        fprintf(stderr,"Error : The start can't be less than the current time\n%s\n",usage);
-        free(endptr);
-        return -1;
+        if(*start < now){
+            fprintf(stderr,"Error : The start can't be less than the current time\n%s\n",usage);
+            free(endptr);
+            return -1;
+        }
     }
 
    
