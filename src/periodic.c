@@ -141,28 +141,25 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
 /**
  * Send a command to period
  */ 
-int send_command(pid_t pid,char *cmd, char **args, time_t start, int period){
+int send_command(char *cmd, char **args, time_t start, int period,int pipe){
 
-    // Send the USR1 signal to period
-    kill(pid,SIGUSR1);
+    
 
-    // Pipe opening
-    int pipe = open("/tmp/period.fifo",O_WRONLY);
-    if(pipe == -1){
-        perror("open");
-        return 2;
+    short code = 0;
+    if(write(pipe,&code,sizeof(short)) == -1){
+        perror("write");
+        return -1;
     }
-    printf("> Pipe opened [WR]\n");
 
     // Write the start timestamp in the pipe
     if(write(pipe,&start,sizeof(time_t)) == -1){
-        perror("fwrite");
+        perror("write");
         return -1;
     }
 
     // Write the period in the pipe
     if(write(pipe,&period,sizeof(int)) == -1){
-        perror("fwrite");
+        perror("write");
         return -1;
     }
 
@@ -176,10 +173,41 @@ int send_command(pid_t pid,char *cmd, char **args, time_t start, int period){
         return -1;
     }
 
-    if(close(pipe) == -1){
-        perror("close");
+    
+    return 0;
+}
+
+int add_command(int argc, char *argv[],int pipe){
+    // check and get arguments values
+    time_t start = -1;
+    int period = -1;
+    char *cmd = NULL;
+    char **args = NULL;
+    if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
+        return -1;
     }
-    printf("> Pipe closed\n");
+    // Send the command's information
+    if(send_command(cmd,args,start,period,pipe) == -1){
+        return -1;
+    }
+
+    return 0;
+}
+
+int remove_command(size_t command_id,int pipe){
+    short code = 1;
+    if(write(pipe,&code,sizeof(short)) == -1){
+        perror("write");
+        return -1;
+    }
+
+    printf("id : %zd\n",command_id);
+
+    if(write(pipe,&command_id,sizeof(size_t)) == -1){
+        perror("write");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -239,18 +267,28 @@ int main(int argc, char *argv[]){
             return 3;
         }
     }else{
-        // check and get arguments values
-        time_t start = -1;
-        int period = -1;
-        char *cmd = NULL;
-        char **args = NULL;
-        if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
+        // Send the USR1 signal to period
+        kill(pid_period,SIGUSR1);
+
+        // Pipe opening
+        int pipe = open("/tmp/period.fifo",O_WRONLY);
+        if(pipe == -1){
+            perror("open");
             return 2;
         }
-        // Send the command's information
-        if(send_command(pid_period,cmd,args,start,period) == -1){
-            return 4;
+        printf("> Pipe opened [WR]\n");
+
+        if(!strcmp(argv[1],"remove")){
+            remove_command(atol(argv[2]),pipe);
+        }else{
+            add_command(argc,argv,pipe);
         }
+
+        if(close(pipe) == -1){
+            perror("close");
+        }
+        printf("> Pipe closed\n");
+        
     }
     
 

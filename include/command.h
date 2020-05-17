@@ -30,7 +30,7 @@ void array_destroy(struct array *self);
 
 void array_add(struct array *self, struct command command);
 
-void array_remove(struct array *self);
+void array_remove(struct array *self, int id);
 
 void array_print(struct array *self);
 

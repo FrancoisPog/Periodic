@@ -31,8 +31,10 @@ int write_pid(){
     FILE *file = fopen("/tmp/period.pid","r");
     if(file != NULL){
         fprintf(stderr,"> Error [write_pid] - period is already running\n");
+        fclose(file);
         return 0;
     }
+    
     if(errno != ENOENT){
         perror("fopen");
         return -1;
@@ -132,17 +134,8 @@ void hand_sigusr(int sig){
 /**
  * Receive a command from periodic
  */ 
-int recv_command(struct command *cmd, size_t id){
+int recv_command(struct command *cmd, size_t id, int pipe){
     
-    int pipe = open("/tmp/period.fifo",O_RDONLY);
-    if(pipe == -1){
-        perror("open");
-        return 4;
-    }
-    printf("> Pipe opened [RD]\n");
-    
-
-
     time_t start;
     int n = read(pipe,&start,sizeof(time_t));
     if(n <= 0){
@@ -173,11 +166,7 @@ int recv_command(struct command *cmd, size_t id){
     cmd->name = name;
     cmd->args = args;
 
-    if(close(pipe) == -1){
-        perror("close");
-        return -1;
-    }
-    printf("> Pipe closed\n");
+    
     
     return 0;
 }
@@ -284,7 +273,11 @@ int search_and_execute_commands(struct array *list){
     int timer = 0;
     size_t next_cmd_index;
     while(timer <= 0){
-        
+        if(list->size == 0){
+            printf("empty list\n");
+            alarm(0);
+            return 1;
+        }
         next_cmd_index = -1;
         for(size_t i = 0 ; i < list->size ; ++i ){
             if(list->data[i].next <= time(NULL) && list->data[i].next != 0){
@@ -293,7 +286,7 @@ int search_and_execute_commands(struct array *list){
                 }
                 list->data[i].next = time(NULL) + list->data[i].period;
                 if(list->data[i].period == 0){
-                    list->data[i].next = 0;
+                    array_remove(list,list->data[i].id);
                 }
             }
 
@@ -305,6 +298,8 @@ int search_and_execute_commands(struct array *list){
         }
         timer =  list->data[next_cmd_index].next - time(NULL);
     }
+
+    
 
     printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
     
@@ -320,13 +315,63 @@ int search_and_execute_commands(struct array *list){
  * Add a command in the list and set alarm
  */ 
 int add_command(struct command cmd, struct array *list){
+    printf("adding\n");
     array_add(list,cmd);
+    printf("added\n");
     search_and_execute_commands(list);
     return 0;
 }
 
 
+int usr1_process(struct array *commands_list){
+    short code = -1;
 
+    int pipe = open("/tmp/period.fifo",O_RDONLY);
+    if(pipe == -1){
+        perror("open");
+        return -1;
+    }
+    printf("> Pipe opened [RD]\n");
+
+
+    if(read(pipe,&code,sizeof(short)) == -1){
+        perror("read");
+        return -1;
+    }
+
+    printf("code : %d\n",code);
+
+    if(!code){
+        size_t static count = 0;
+        struct command cmd;
+
+        // Receive command from periodic
+        if(recv_command(&cmd,count++,pipe) == -1){
+            return -1;
+        }
+        // Add command in array
+        add_command(cmd,commands_list);
+    }else{
+        size_t id;
+        if(read(pipe,&id,sizeof(size_t)) == -1){
+            return -1;
+        }
+
+        array_remove(commands_list,id);
+
+        //printf("id : %zd\n",id);
+
+    }
+
+
+    if(close(pipe) == -1){
+        perror("close");
+        return -1;
+    }
+    printf("> Pipe closed\n");
+
+    return 0;
+}
 
 
 
@@ -367,9 +412,6 @@ int send_command_array(struct array commands_list){
     }
 
     for (size_t i = 0; i < commands_list.size ; i++){
-        if(commands_list.data[i].next == 0){
-            continue;
-        }
 
         // Get the argv length
         size_t index = 0;
@@ -501,7 +543,7 @@ int main(){
     }
 
     // Creation commands list
-    size_t count = 0;
+    
     struct array commands_list;
     array_create(&commands_list);
 
@@ -536,14 +578,7 @@ int main(){
         }
 
         if(usr1){
-            // When usr1
-            struct command cmd;
-            // Receive command from periodic
-            if(recv_command(&cmd,count++) == -1){
-                return 6;
-            }
-            // Add command in array
-            add_command(cmd,&commands_list);
+            usr1_process(&commands_list);
             usr1--;
         }
         if (usr2){
