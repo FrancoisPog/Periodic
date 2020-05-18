@@ -143,8 +143,6 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
  */ 
 int send_command(char *cmd, char **args, time_t start, int period,int pipe){
 
-    
-
     short code = 0;
     if(write(pipe,&code,sizeof(short)) == -1){
         perror("write");

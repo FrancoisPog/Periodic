@@ -298,6 +298,9 @@ int search_and_execute_commands(struct array *list){
             
             
         }
+        if(next_cmd_index == -1){
+            continue;
+        }
         timer =  list->data[next_cmd_index].next - time(NULL);
     }
 
@@ -352,6 +355,12 @@ int usr1_process(struct array *commands_list){
         if(recv_command(&cmd,count++,pipe) == -1){
             return -1;
         }
+
+        if(close(pipe) == -1){
+            perror("close");
+            return -1;
+        }
+        printf("> Pipe closed\n");
         // Add command in array
         add_command(cmd,commands_list);
     }else{
@@ -360,18 +369,20 @@ int usr1_process(struct array *commands_list){
             return -1;
         }
 
+        if(close(pipe) == -1){
+            perror("close");
+            return -1;
+        }
+        printf("> Pipe closed\n");
+
         array_remove(commands_list,id);
 
-        //printf("id : %zd\n",id);
+        
 
     }
 
 
-    if(close(pipe) == -1){
-        perror("close");
-        return -1;
-    }
-    printf("> Pipe closed\n");
+    
 
     return 0;
 }
@@ -580,6 +591,7 @@ int main(){
 
         if(chld){
             check_zombie(0);
+            chld =0;
         }
 
         if(stop){
@@ -616,13 +628,12 @@ int main(){
 
     printf("kill:%d\n",kill(0,SIGTERM));
 
-    sleep(1);
+   
 
     
 
-    //while(launched > killed){
-        check_zombie(1);
-    //}
+    check_zombie(1);
+    
 
 
     printf("l:%d k:%d\n",launched,killed);
