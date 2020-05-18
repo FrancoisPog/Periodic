@@ -269,18 +269,20 @@ int main(int argc, char *argv[]){
     }else{
         // Send the USR1 signal to period
         kill(pid_period,SIGUSR1);
-
+       
         // Pipe opening
         int pipe = open("/tmp/period.fifo",O_WRONLY);
         if(pipe == -1){
             perror("open");
             return 2;
         }
-        printf("> Pipe opened [WR]\n");
+        printf("> Pipe opened [WR] : %d\n",pipe);
 
         if(!strcmp(argv[1],"remove")){
+            printf("remove\n");
             remove_command(atol(argv[2]),pipe);
         }else{
+            printf("add\n");
             add_command(argc,argv,pipe);
         }
 

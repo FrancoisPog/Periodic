@@ -287,6 +287,8 @@ int search_and_execute_commands(struct array *list){
                 list->data[i].next = time(NULL) + list->data[i].period;
                 if(list->data[i].period == 0){
                     array_remove(list,list->data[i].id);
+                    --i;
+                    continue;
                 }
             }
 
@@ -325,7 +327,8 @@ int add_command(struct command cmd, struct array *list){
 
 int usr1_process(struct array *commands_list){
     short code = -1;
-
+    
+    printf("waiting pipe opening [usr1_process]\n");
     int pipe = open("/tmp/period.fifo",O_RDONLY);
     if(pipe == -1){
         perror("open");
@@ -465,11 +468,17 @@ int send_command_array(struct array commands_list){
     return 0;
 }
 
-int check_zombie(){
-    
+int check_zombie(int block){
+    printf("check_zombie : begin\n");
     while(1){
         int wstatus;
-        pid_t pid = waitpid(-1,&wstatus,WNOHANG);
+        pid_t pid;
+        if(!block){
+            pid = waitpid(-1,&wstatus,WNOHANG);
+        }else{
+            pid = wait(&wstatus);
+        }
+        
         if(pid <= 0){
             if(pid == -1 && errno != ECHILD){
                 perror("waitpid");
@@ -485,7 +494,7 @@ int check_zombie(){
         }
         killed++;
     }
-
+    printf("check_zombie : end\n");
     return 0;
 }
 
@@ -570,7 +579,7 @@ int main(){
         
 
         if(chld){
-            check_zombie();
+            check_zombie(0);
         }
 
         if(stop){
@@ -578,8 +587,9 @@ int main(){
         }
 
         if(usr1){
+             //sleep(1);
             usr1_process(&commands_list);
-            usr1--;
+            usr1 = 0;
         }
         if (usr2){
 
@@ -611,7 +621,7 @@ int main(){
     
 
     //while(launched > killed){
-        check_zombie();
+        check_zombie(1);
     //}
 
 
