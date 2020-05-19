@@ -175,7 +175,7 @@ int send_command(char *cmd, char **args, time_t start, int period,int pipe){
     return 0;
 }
 
-int add_command(int argc, char *argv[],int pipe){
+int add_command(int argc, char *argv[],int pid_period){
     // check and get arguments values
     time_t start = -1;
     int period = -1;
@@ -184,15 +184,43 @@ int add_command(int argc, char *argv[],int pipe){
     if(check_args(argc, argv, &start, &period,&cmd,&args) == -1){
         return -1;
     }
+
+    // Send the USR1 signal to period
+    kill(pid_period,SIGUSR1);
+
+    // Pipe opening
+    int pipe = open("/tmp/period.fifo",O_WRONLY);
+    if(pipe == -1){
+        perror("open");
+        return 2;
+    }
+    //printf("> Pipe opened [WR] : %d\n",pipe);
+
     // Send the command's information
     if(send_command(cmd,args,start,period,pipe) == -1){
         return -1;
     }
 
+    if(close(pipe) == -1){
+        perror("close");
+    }
+    //printf("> Pipe closed\n");
+
     return 0;
 }
 
-int remove_command(size_t command_id,int pipe){
+int remove_command(size_t command_id,int pid_period){
+    // Send the USR1 signal to period
+    kill(pid_period,SIGUSR1);
+
+    // Pipe opening
+    int pipe = open("/tmp/period.fifo",O_WRONLY);
+    if(pipe == -1){
+        perror("open");
+        return 2;
+    }
+    printf("> Pipe opened [WR] : %d\n",pipe);
+
     short code = 1;
     if(write(pipe,&code,sizeof(short)) == -1){
         perror("write");
@@ -205,6 +233,11 @@ int remove_command(size_t command_id,int pipe){
         perror("write");
         return -1;
     }
+
+    if(close(pipe) == -1){
+        perror("close");
+    }
+    printf("> Pipe closed\n");
 
     return 0;
 }
@@ -265,29 +298,17 @@ int main(int argc, char *argv[]){
             return 3;
         }
     }else{
-        // Send the USR1 signal to period
-        kill(pid_period,SIGUSR1);
+        
        
-        // Pipe opening
-        int pipe = open("/tmp/period.fifo",O_WRONLY);
-        if(pipe == -1){
-            perror("open");
-            return 2;
-        }
-        printf("> Pipe opened [WR] : %d\n",pipe);
-
         if(!strcmp(argv[1],"remove")){
-            printf("remove\n");
-            remove_command(atol(argv[2]),pipe);
+            //printf("remove\n");
+            remove_command(atol(argv[2]),pid_period);
         }else{
-            printf("add\n");
-            add_command(argc,argv,pipe);
+            //printf("add\n");
+            add_command(argc,argv,pid_period);
         }
 
-        if(close(pipe) == -1){
-            perror("close");
-        }
-        printf("> Pipe closed\n");
+        
         
     }
     

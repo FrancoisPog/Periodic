@@ -95,6 +95,43 @@ int make_dir(){
     return 0;
 }
 
+int period_redirection(){
+
+    int err = open("/tmp/period.err",O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
+    if(err == -1){
+        perror("open");
+        return -1;
+    }
+
+    if(dup2(err,STDERR_FILENO) == -1){
+        perror("dup2");
+        return -1;
+    }
+
+    if(close(err) == -1){
+        perror("close");
+        return -1;
+    }
+
+    int out = open("/tmp/period.out",O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
+    if(out == -1){
+        perror("open");
+        return -1;
+    }
+
+    if(dup2(out,STDOUT_FILENO) == -1){
+        perror("dup2");
+        return -1;
+    }
+
+    if(close(out) == -1){
+        perror("close");
+        return -1;
+    }
+
+    return 0;
+}
+
 volatile sig_atomic_t usr1 = 0;
 volatile sig_atomic_t usr2 = 0;
 
@@ -174,13 +211,13 @@ int recv_command(struct command *cmd, size_t id, int pipe){
 /**
  * Redirects the standards file descriptor
  */ 
-int redirection(char type,size_t cmdId){
+int command_redirection(char type,size_t cmdId){
     if(type != 'i' && type != 'o' && type != 'e'){
         return -1;
     }
 
     int fd = -1;
-    char buf[23];
+    char buf[32];
     switch(type){
         case 'i' : {
             sprintf(buf,"/dev/null");
@@ -203,7 +240,7 @@ int redirection(char type,size_t cmdId){
     }
     assert(fd != -1);
 
-    int out = open(buf,O_WRONLY | O_CREAT | O_APPEND,0755);
+    int out = open(buf,O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
     if(out == -1){
         perror("open");
         exit(1);
@@ -251,9 +288,9 @@ int execute_command(struct command cmd, struct array *list){
         sigaction(SIGINT,&dflt,NULL);
         sigaction(SIGQUIT,&dflt,NULL);
 
-        redirection('o',cmd.id);
-        redirection('e',cmd.id);
-        redirection('i',cmd.id);
+        command_redirection('o',cmd.id);
+        command_redirection('e',cmd.id);
+        command_redirection('i',cmd.id);
         
 
 
@@ -274,7 +311,7 @@ int search_and_execute_commands(struct array *list){
     size_t next_cmd_index;
     while(timer <= 0){
         if(list->size == 0){
-            printf("empty list\n");
+            
             alarm(0);
             return 1;
         }
@@ -306,7 +343,7 @@ int search_and_execute_commands(struct array *list){
 
     
 
-    printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
+    //printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
     
 
     alarm((unsigned)timer);
@@ -320,9 +357,9 @@ int search_and_execute_commands(struct array *list){
  * Add a command in the list and set alarm
  */ 
 int add_command(struct command cmd, struct array *list){
-    printf("adding\n");
+    
     array_add(list,cmd);
-    printf("added\n");
+    
     search_and_execute_commands(list);
     return 0;
 }
@@ -331,13 +368,13 @@ int add_command(struct command cmd, struct array *list){
 int usr1_process(struct array *commands_list){
     short code = -1;
     
-    printf("waiting pipe opening [usr1_process]\n");
+    
     int pipe = open("/tmp/period.fifo",O_RDONLY);
     if(pipe == -1){
         perror("open");
         return -1;
     }
-    printf("> Pipe opened [RD]\n");
+    //printf("> Pipe opened [RD]\n");
 
 
     if(read(pipe,&code,sizeof(short)) == -1){
@@ -345,7 +382,6 @@ int usr1_process(struct array *commands_list){
         return -1;
     }
 
-    printf("code : %d\n",code);
 
     if(!code){
         size_t static count = 0;
@@ -360,7 +396,8 @@ int usr1_process(struct array *commands_list){
             perror("close");
             return -1;
         }
-        printf("> Pipe closed\n");
+        //printf("> Pipe closed\n");
+
         // Add command in array
         add_command(cmd,commands_list);
     }else{
@@ -373,7 +410,7 @@ int usr1_process(struct array *commands_list){
             perror("close");
             return -1;
         }
-        printf("> Pipe closed\n");
+        //printf("> Pipe closed\n");
 
         array_remove(commands_list,id);
 
@@ -399,7 +436,7 @@ int send_command_array(struct array commands_list){
         perror("open");
         return -1;
     }
-    printf("> Pipe opened [WR]\n");
+    //printf("> Pipe opened [WR]\n");
 
     if(commands_list.size == 0){
         char **tmp = calloc(2,sizeof(char*));
@@ -413,7 +450,7 @@ int send_command_array(struct array commands_list){
         send_argv(pipe,tmp);
         free(tmp);
         close(pipe);
-        printf("> Pipe closed\n");
+        //printf("> Pipe closed\n");
         return 0;
     }
     
@@ -474,13 +511,12 @@ int send_command_array(struct array commands_list){
         perror("close");
         return -1;
     }
-    printf("> Pipe closed\n");
+    //printf("> Pipe closed\n");
     
     return 0;
 }
 
 int check_zombie(int block){
-    printf("check_zombie : begin\n");
     while(1){
         int wstatus;
         pid_t pid;
@@ -505,7 +541,6 @@ int check_zombie(int block){
         }
         killed++;
     }
-    printf("check_zombie : end\n");
     return 0;
 }
 
@@ -515,6 +550,11 @@ int main(){
     if(write_pid() <= 0){
         return 1;
     }
+
+    if(period_redirection() == -1){
+        return 7;
+    }
+
 
     if(make_pipe() == -1){
         return 2;
@@ -584,10 +624,7 @@ int main(){
 
     while(!stop){
         
-        
         sigsuspend(&empty_set);
-
-        
 
         if(chld){
             check_zombie(0);
@@ -608,11 +645,11 @@ int main(){
             if(send_command_array(commands_list) == -1){
                 return 7;
             }
-            usr2--; 
+            usr2 = 0; 
         }
         
         if(alrm){
-            alrm--;
+            alrm = 0;
             if(search_and_execute_commands(&commands_list) == -1){
                 return -1;
             }
@@ -624,13 +661,7 @@ int main(){
     }
     alarm(0);
 
-    printf("l:%d k:%d\n",launched,killed);
-
-    printf("kill:%d\n",kill(0,SIGTERM));
-
-   
-
-    
+    kill(0,SIGTERM);
 
     check_zombie(1);
     
