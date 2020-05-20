@@ -5,31 +5,25 @@ OBJDIR=object
 
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
-all : period periodic test_libcommand test_libmessage  launch_daemon
+all : period periodic test_libmessage  launch_daemon
 
-periodic : $(OBJDIR)/periodic.o libmessage.so libcommand.so
+periodic : $(OBJDIR)/periodic.o libmessage.so 
 	@echo make : $@
-	@gcc -L${PWD} $< -lmessage -lcommand -o $@
+	@gcc -L${PWD} $< -lmessage  -o $@
 
-period : $(OBJDIR)/period.o libmessage.so libcommand.so
+period : $(OBJDIR)/period.o libmessage.so $(OBJDIR)/command.o
 	@echo make : $@
-	@gcc -L${PWD} $< -lmessage -lcommand -o $@
+	@gcc -L${PWD} $< $(OBJDIR)/command.o -lmessage  -o $@
 
 test_libmessage : $(OBJDIR)/test_libmessage.o libmessage.so
 	@echo make : $@
 	@gcc -L${PWD} $< -lmessage -o $@
-
-test_libcommand : $(OBJDIR)/test_libcommand.o libcommand.so
-	@echo make : $@
-	@gcc -L${PWD} $< -lcommand -o $@
 	
 lib%.so : $(OBJDIR)/%.o 
 	@echo make : $@
 	@$(CC) -shared $< -o $@
 
-$(OBJDIR)/command.o : $(SRCDIR)/command.c
-	@echo make : $@
-	@$(CC) $(CFLAGS) -fPIC -c -o $@ $<
+
 
 $(OBJDIR)/message.o : $(SRCDIR)/message.c
 	@echo make : $@

@@ -24,7 +24,7 @@ struct array {
     size_t size;
 };
 
-void array_create(struct array *self);
+int array_create(struct array *self);
 
 void array_destroy(struct array *self);
 

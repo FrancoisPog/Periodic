@@ -69,19 +69,23 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
         fprintf(stderr,"> Error [check_args] - At least one of parameters is NULL\n");
         return -1;
     }
-    char *usage = "Usage : ./periodic [ start period cdm [arg]... ]" ;
+    char *usage = "Usage : ./periodic\nUsage : ./periodic start period cmd [arg]...\nUsage : ./periodic remove command_id" ;
 
     if(argc == 1){
         return 0;
     }
 
     if(argc < 4){
-        fprintf(stderr,"Error : The number of arguments must be 1 or greater than 3\n%s\n",usage);
+        fprintf(stderr,"Error : Invalid arguments number\n%s\n",usage);
         return -1;
     }
 
     // Get the start value
     char **endptr = calloc(1,sizeof(char *));
+    if(endptr == NULL){
+        perror("calloc");
+        return -1;
+    }
 
 
     if(strcmp(argv[1],"now") == 0){
@@ -209,7 +213,34 @@ int add_command(int argc, char *argv[],int pid_period){
     return 0;
 }
 
-int remove_command(size_t command_id,int pid_period){
+int remove_command(char *command_id_str,int pid_period){
+    char *usage = "Usage : ./periodic\nUsage : ./periodic start period cmd [arg]...\nUsage : ./periodic remove command_id" ;
+    if(command_id_str == NULL){
+        fprintf(stderr,"Error : The command id is missing\n%s\n",usage);
+        return -1;
+    }
+    
+
+    char **endptr = calloc(1,sizeof(char *));
+    if(endptr == NULL){
+        perror("calloc");
+        return -1;
+    }
+
+    ssize_t command_id = strtoll(command_id_str,endptr,10);
+
+    if(*endptr != command_id_str + strlen(command_id_str)){
+        free(endptr);
+        fprintf(stderr,"Error : Invalid id format\n%s\n",usage);
+        return -1;
+    }
+    free(endptr);
+
+    if(command_id < 0){
+        fprintf(stderr,"Error : The command id can't be negative\n%s\n",usage);
+        return -1;
+    }
+
     // Send the USR1 signal to period
     kill(pid_period,SIGUSR1);
 
@@ -219,7 +250,6 @@ int remove_command(size_t command_id,int pid_period){
         perror("open");
         return 2;
     }
-    printf("> Pipe opened [WR] : %d\n",pipe);
 
     short code = 1;
     if(write(pipe,&code,sizeof(short)) == -1){
@@ -227,7 +257,7 @@ int remove_command(size_t command_id,int pid_period){
         return -1;
     }
 
-    printf("id : %zd\n",command_id);
+    //printf("id : %lld\n",command_id);
 
     if(write(pipe,&command_id,sizeof(size_t)) == -1){
         perror("write");
@@ -237,7 +267,6 @@ int remove_command(size_t command_id,int pid_period){
     if(close(pipe) == -1){
         perror("close");
     }
-    printf("> Pipe closed\n");
 
     return 0;
 }
@@ -256,7 +285,6 @@ int recv_command_array(pid_t pid){
         perror("open");
         return -1;
     }
-    printf("> Pipe opened [RD]\n");
     
 
     char** list = recv_argv(pipe);
@@ -275,7 +303,6 @@ int recv_command_array(pid_t pid){
         perror("close");
         return -1;
     }
-    printf("> Pipe closed\n");
 
     return 0;
 }
@@ -298,14 +325,16 @@ int main(int argc, char *argv[]){
             return 3;
         }
     }else{
-        
-       
         if(!strcmp(argv[1],"remove")){
             //printf("remove\n");
-            remove_command(atol(argv[2]),pid_period);
+            if(remove_command(argv[2],pid_period) == -1){
+                return 4;
+            }
         }else{
             //printf("add\n");
-            add_command(argc,argv,pid_period);
+            if(add_command(argc,argv,pid_period) == -1){
+                return 5;
+            }
         }
 
         

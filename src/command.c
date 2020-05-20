@@ -47,14 +47,19 @@ void command_print(struct command *self){
 
 // ARRAY
 
-void array_create(struct array *self){
+int array_create(struct array *self){
     if(self == NULL){
-        return;
+        return -1;
     }
     
     self->capacity = 10;
     self->size = 0;
     self->data = calloc(self->capacity, sizeof(struct command));
+    if(self->data == NULL){
+        perror("calloc");
+        return -1;
+    }
+    return 0;
 
 }
 

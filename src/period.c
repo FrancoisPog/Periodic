@@ -95,6 +95,11 @@ int make_dir(){
     return 0;
 }
 
+void exit_properly(int noexit){
+    unlink("/tmp/period.pid");
+    exit(noexit);
+}
+
 int period_redirection(){
 
     int err = open("/tmp/period.err",O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
@@ -374,14 +379,11 @@ int usr1_process(struct array *commands_list){
         perror("open");
         return -1;
     }
-    //printf("> Pipe opened [RD]\n");
-
 
     if(read(pipe,&code,sizeof(short)) == -1){
         perror("read");
         return -1;
     }
-
 
     if(!code){
         size_t static count = 0;
@@ -396,7 +398,6 @@ int usr1_process(struct array *commands_list){
             perror("close");
             return -1;
         }
-        //printf("> Pipe closed\n");
 
         // Add command in array
         add_command(cmd,commands_list);
@@ -410,16 +411,10 @@ int usr1_process(struct array *commands_list){
             perror("close");
             return -1;
         }
-        //printf("> Pipe closed\n");
 
         array_remove(commands_list,id);
 
-        
-
     }
-
-
-    
 
     return 0;
 }
@@ -436,7 +431,6 @@ int send_command_array(struct array commands_list){
         perror("open");
         return -1;
     }
-    //printf("> Pipe opened [WR]\n");
 
     if(commands_list.size == 0){
         char **tmp = calloc(2,sizeof(char*));
@@ -450,7 +444,6 @@ int send_command_array(struct array commands_list){
         send_argv(pipe,tmp);
         free(tmp);
         close(pipe);
-        //printf("> Pipe closed\n");
         return 0;
     }
     
@@ -511,7 +504,6 @@ int send_command_array(struct array commands_list){
         perror("close");
         return -1;
     }
-    //printf("> Pipe closed\n");
     
     return 0;
 }
@@ -547,88 +539,121 @@ int check_zombie(int block){
 // MAIN 
 int main(){
     // Initialization
-    if(write_pid() <= 0){
-        return 1;
+    pid_t pid = write_pid();
+
+    if(pid == -1){
+        exit_properly(1);
     }
 
-    if(period_redirection() == -1){
-        return 7;
+    if(pid == 0){
+        return 0;
     }
+
+    // if(period_redirection() == -1){
+    //     exit_properly(7);
+    // }
 
 
     if(make_pipe() == -1){
-        return 2;
+        exit_properly(2);
     }
 
     if(make_dir() == -1){
-        return 3;
+        exit_properly(4);
     }
 
     // Set handler
     struct sigaction sig_usr;
-    sigemptyset(&sig_usr.sa_mask);
+    if(sigemptyset(&sig_usr.sa_mask) == -1){
+        perror("sigemptyset");
+        exit_properly(19);
+    }
     sig_usr.sa_handler = hand_sigusr;
     sig_usr.sa_flags = 0;
     
     if(sigaction(SIGUSR1,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
     if(sigaction(SIGUSR2,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
     if(sigaction(SIGALRM,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
     if(sigaction(SIGCHLD,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
 
     if(sigaction(SIGINT,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
 
     if(sigaction(SIGTERM,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
 
     if(sigaction(SIGQUIT,&sig_usr,NULL) == -1){
         perror("sigaction");
-        return 5;
+        exit_properly(5);
     }
 
     // Creation commands list
     
     struct array commands_list;
-    array_create(&commands_list);
+    if(array_create(&commands_list) == -1){
+        exit_properly(14);
+    }
 
     sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set,SIGUSR1);
-    sigaddset(&set,SIGUSR2);
-    sigaddset(&set,SIGALRM);
-    sigaddset(&set,SIGCHLD);
-    sigaddset(&set,SIGINT);
-    sigaddset(&set,SIGTERM);
-    sigaddset(&set,SIGQUIT);
+    if(sigemptyset(&set) == -1){
+        perror("sigemptyset");
+        exit_properly(15);
+    }
 
-    sigprocmask(SIG_BLOCK,&set,NULL);
+    short error = 0;
+
+    error += sigaddset(&set,SIGUSR1);
+    error += sigaddset(&set,SIGUSR2);
+    error += sigaddset(&set,SIGALRM);
+    error += sigaddset(&set,SIGCHLD);
+    error += sigaddset(&set,SIGINT);
+    error += sigaddset(&set,SIGTERM);
+    error += sigaddset(&set,SIGQUIT);
+
+    if(error){
+        perror("sigaddset");
+        exit_properly(16);
+    }
+
+    if(sigprocmask(SIG_BLOCK,&set,NULL) == -1){
+        perror("sigprocmask");
+        exit_properly(17);
+    }
 
     sigset_t empty_set;
-    sigemptyset(&empty_set);
+    if(sigemptyset(&empty_set) == -1){
+        perror("sigemptyset");
+        exit_properly(18);
+    }
 
     while(!stop){
         
-        sigsuspend(&empty_set);
+        if(sigsuspend(&empty_set) == -1 && errno != EINTR){
+            perror("sigsuspend");
+            exit_properly(12);
+        }
 
         if(chld){
-            check_zombie(0);
-            chld =0;
+            if(check_zombie(0) == -1){
+                exit_properly(10);
+            }            
+            chld = 0;
         }
 
         if(stop){
@@ -636,14 +661,15 @@ int main(){
         }
 
         if(usr1){
-             //sleep(1);
-            usr1_process(&commands_list);
+            if(usr1_process(&commands_list) == -1){
+                exit_properly(13);
+            }
             usr1 = 0;
         }
         if (usr2){
 
             if(send_command_array(commands_list) == -1){
-                return 7;
+                exit_properly(8);
             }
             usr2 = 0; 
         }
@@ -651,7 +677,7 @@ int main(){
         if(alrm){
             alrm = 0;
             if(search_and_execute_commands(&commands_list) == -1){
-                return -1;
+                exit_properly(9);
             }
             
         }
@@ -663,7 +689,9 @@ int main(){
 
     kill(0,SIGTERM);
 
-    check_zombie(1);
+    if(check_zombie(1) == -1){
+        exit_properly(11);
+    }
     
 
 
