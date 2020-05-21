@@ -307,9 +307,8 @@ int search_and_execute_commands(struct array *list){
     size_t next_cmd_index;
     while(timer <= 0){
         if(list->size == 0){
-            
             alarm(0);
-            return 1;
+            return 0;
         }
         next_cmd_index = -1;
         for(size_t i = 0 ; i < list->size ; ++i ){
@@ -336,12 +335,7 @@ int search_and_execute_commands(struct array *list){
         }
         timer =  list->data[next_cmd_index].next - time(NULL);
     }
-
     
-
-    //printf("[Prochaine commande : %s - %ds]\n",list->data[next_cmd_index].name,timer);
-    
-
     alarm((unsigned)timer);
 
     return 0;
@@ -354,10 +348,11 @@ int search_and_execute_commands(struct array *list){
  */ 
 int add_command(struct command cmd, struct array *list){
     
-    array_add(list,cmd);
+    if(array_add(list,cmd) == -1){
+        return -1;
+    }
     
-    search_and_execute_commands(list);
-    return 0;
+    return search_and_execute_commands(list);
 }
 
 
@@ -391,7 +386,10 @@ int usr1_process(struct array *commands_list){
         }
 
         // Add command in array
-        add_command(cmd,commands_list);
+        if(add_command(cmd,commands_list) == -1){
+            return -1;
+        }
+
     }else{
         size_t id;
         if(read(pipe,&id,sizeof(size_t)) == -1){
@@ -403,7 +401,9 @@ int usr1_process(struct array *commands_list){
             return -1;
         }
 
-        array_remove(commands_list,id);
+        if(array_remove(commands_list,id) == -1){
+            return -1;
+        }
 
     }
 

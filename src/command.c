@@ -77,28 +77,31 @@ void array_destroy(struct array *self){
     self->size = 0;
 }
 
-void array_add(struct array *self, struct command cmd){
+int array_add(struct array *self, struct command cmd){
     if(self == NULL){
-        return;
+        return -1;
     }
 
     if(self->size == self->capacity){
-        //printf("up\n");
 		self->capacity *= 2;
 		struct command *data = calloc(self->capacity, sizeof(struct command));
+        if(data == NULL){
+            perror("calloc");
+            return -1;
+        }
 		memcpy(data, self->data, self->size * sizeof(struct command));
 		free(self->data);
 		self->data = data;
 	}
 	self->data[self->size] = cmd;
 	self->size ++;
-    
+    return 0;
 
 }
 
-void array_remove(struct array *self, int id){
+int array_remove(struct array *self, int id){
     if(self == NULL){
-        return;
+        return -1;
     }
 
     int found = 0;
@@ -116,20 +119,24 @@ void array_remove(struct array *self, int id){
     }
 
     if(!found){
-        return;
+        return 0;
     }
 
     self->size--;
 
     if(self->capacity > 10 && self->size < (self->capacity)/2){
-        //printf("down\n");
 		self->capacity /= 2;
 		struct command *data = calloc(self->capacity, sizeof(struct command));
+        if(data == NULL){
+            perror("calloc");
+            return -1;
+        }
 		memcpy(data, self->data, self->size * sizeof(struct command));
 		free(self->data);
 		self->data = data;
 	}
 
+    return 0;
     
 }
 
