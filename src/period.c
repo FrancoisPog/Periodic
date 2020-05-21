@@ -582,38 +582,19 @@ int main(){
     sig_usr.sa_handler = hand_sigusr;
     sig_usr.sa_flags = 0;
     
-    if(sigaction(SIGUSR1,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
-    if(sigaction(SIGUSR2,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
-    if(sigaction(SIGALRM,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
-    if(sigaction(SIGCHLD,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
+    if(sigaction(SIGUSR1,&sig_usr,NULL) 
+        || sigaction(SIGUSR2,&sig_usr,NULL) 
+        || sigaction(SIGALRM,&sig_usr,NULL) 
+        || sigaction(SIGCHLD,&sig_usr,NULL)
+        || sigaction(SIGINT,&sig_usr,NULL) 
+        || sigaction(SIGTERM,&sig_usr,NULL) 
+        || sigaction(SIGQUIT,&sig_usr,NULL)){
 
-    if(sigaction(SIGINT,&sig_usr,NULL) == -1){
         perror("sigaction");
         exit(5);
     }
-
-    if(sigaction(SIGTERM,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
-
-    if(sigaction(SIGQUIT,&sig_usr,NULL) == -1){
-        perror("sigaction");
-        exit(5);
-    }
-
+    
+   
     // Set the mask
     sigset_t set;
     if(sigemptyset(&set) == -1){
@@ -621,16 +602,14 @@ int main(){
         exit(15);
     }
 
-    short error = 0;
-    error += sigaddset(&set,SIGUSR1);
-    error += sigaddset(&set,SIGUSR2);
-    error += sigaddset(&set,SIGALRM);
-    error += sigaddset(&set,SIGCHLD);
-    error += sigaddset(&set,SIGINT);
-    error += sigaddset(&set,SIGTERM);
-    error += sigaddset(&set,SIGQUIT);
-
-    if(error){
+    if(sigaddset(&set,SIGUSR1) 
+        || sigaddset(&set,SIGUSR2) 
+        || sigaddset(&set,SIGALRM)
+        || sigaddset(&set,SIGCHLD)
+        || sigaddset(&set,SIGINT)
+        || sigaddset(&set,SIGTERM)
+        || sigaddset(&set,SIGQUIT)){
+            
         perror("sigaddset");
         exit(16);
     }

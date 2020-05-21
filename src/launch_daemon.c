@@ -37,10 +37,10 @@ int daemonize(char *argv[]){
                 exit(2);
             }
 
-            if(fclose(stdin) || fclose(stdout) || fclose(stderr)){
-                perror("fclose");
-                exit(3);
-            }
+            // if(fclose(stdin) || fclose(stdout) || fclose(stderr)){
+            //     perror("fclose");
+            //     exit(3);
+            // }
             
             execvp(argv[1],argv+1);
             perror("execvp");
