@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 1
 #define _XOPEN_SOURCE 500
+#define _DEFAULT_SOURCE 1
 #include "message.h"
 #include "command.h"
 #include <stdio.h>
@@ -20,8 +21,7 @@
  * Check if period is already running, otherwise create /tmp/period.pid and write the pid inside
  * Return : 
  *      > The pid 
- *      > 0 if period is already running
- *      > -1 if an error has occured
+ *      > -1 if an error has occured (or period is already running)
  */ 
 int write_pid(){
     // Get the pid
@@ -32,7 +32,7 @@ int write_pid(){
     if(file != NULL){
         fprintf(stderr,"> Error [write_pid] - period is already running\n");
         fclose(file);
-        return 0;
+        return -1;
     }
     
     if(errno != ENOENT){
@@ -95,10 +95,7 @@ int make_dir(){
     return 0;
 }
 
-void exit_properly(int noexit){
-    unlink("/tmp/period.pid");
-    exit(noexit);
-}
+
 
 int period_redirection(){
 
@@ -142,10 +139,6 @@ volatile sig_atomic_t usr2 = 0;
 
 volatile sig_atomic_t alrm = 0; 
 volatile sig_atomic_t chld = 0;
-
-volatile sig_atomic_t launched = 0;
-volatile sig_atomic_t killed = 0;
-
 
 volatile sig_atomic_t stop = 0;
 
@@ -301,10 +294,8 @@ int execute_command(struct command cmd, struct array *list){
 
         execvp(cmd.name,cmd.args);
         perror("execvp");
-        array_destroy(list);
         exit(1);
     }
-    launched++;
     return 0;
 }
 
@@ -531,93 +522,106 @@ int check_zombie(int block){
         } else if (WIFSIGNALED(wstatus)) {
             fprintf(stderr,"%d : End by signal n°%d\n",pid, WTERMSIG(wstatus));
         }
-        killed++;
     }
     return 0;
 }
 
+
+
+volatile sig_atomic_t pid_period = -1;
+
+void exit_properly(int status, struct array *list){
+    if(pid_period == getpid()){
+        unlink("/tmp/period.pid");
+    }
+    array_destroy(list);
+}
+
+
+
+
 // MAIN 
 int main(){
-    // Initialization
-    pid_t pid = write_pid();
+    // Write period pid in the file
+    pid_period = write_pid();
 
-    if(pid == -1){
-        exit_properly(1);
+    if(pid_period == -1){
+        exit(1);
     }
 
-    if(pid == 0){
-        return 0;
+    // Commands list creation
+    struct array commands_list;
+    if(array_create(&commands_list) == -1){
+        exit(14);
     }
 
-    // if(period_redirection() == -1){
-    //     exit_properly(7);
-    // }
+    // Set the exit handler
+    on_exit(( void (*)( int , void * ) )exit_properly,&commands_list);
 
+    // Redirection of period I/O 
+    if(period_redirection() == -1){
+        exit(7);
+    }
 
+    // Pipe creation
     if(make_pipe() == -1){
-        exit_properly(2);
+        exit(2);
     }
 
+    // Directory creation
     if(make_dir() == -1){
-        exit_properly(4);
+        exit(4);
     }
 
     // Set handler
     struct sigaction sig_usr;
     if(sigemptyset(&sig_usr.sa_mask) == -1){
         perror("sigemptyset");
-        exit_properly(19);
+        exit(19);
     }
     sig_usr.sa_handler = hand_sigusr;
     sig_usr.sa_flags = 0;
     
     if(sigaction(SIGUSR1,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
     if(sigaction(SIGUSR2,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
     if(sigaction(SIGALRM,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
     if(sigaction(SIGCHLD,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
 
     if(sigaction(SIGINT,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
 
     if(sigaction(SIGTERM,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
 
     if(sigaction(SIGQUIT,&sig_usr,NULL) == -1){
         perror("sigaction");
-        exit_properly(5);
+        exit(5);
     }
 
-    // Creation commands list
-    
-    struct array commands_list;
-    if(array_create(&commands_list) == -1){
-        exit_properly(14);
-    }
-
+    // Set the mask
     sigset_t set;
     if(sigemptyset(&set) == -1){
         perror("sigemptyset");
-        exit_properly(15);
+        exit(15);
     }
 
     short error = 0;
-
     error += sigaddset(&set,SIGUSR1);
     error += sigaddset(&set,SIGUSR2);
     error += sigaddset(&set,SIGALRM);
@@ -628,30 +632,31 @@ int main(){
 
     if(error){
         perror("sigaddset");
-        exit_properly(16);
+        exit(16);
     }
 
     if(sigprocmask(SIG_BLOCK,&set,NULL) == -1){
         perror("sigprocmask");
-        exit_properly(17);
+        exit(17);
     }
 
+    // Creation of empty set
     sigset_t empty_set;
     if(sigemptyset(&empty_set) == -1){
         perror("sigemptyset");
-        exit_properly(18);
+        exit(18);
     }
 
     while(!stop){
         
         if(sigsuspend(&empty_set) == -1 && errno != EINTR){
             perror("sigsuspend");
-            exit_properly(12);
+            exit(12);
         }
 
         if(chld){
             if(check_zombie(0) == -1){
-                exit_properly(10);
+                exit(10);
             }            
             chld = 0;
         }
@@ -662,14 +667,14 @@ int main(){
 
         if(usr1){
             if(usr1_process(&commands_list) == -1){
-                exit_properly(13);
+                exit(13);
             }
             usr1 = 0;
         }
         if (usr2){
 
             if(send_command_array(commands_list) == -1){
-                exit_properly(8);
+                exit(8);
             }
             usr2 = 0; 
         }
@@ -677,7 +682,7 @@ int main(){
         if(alrm){
             alrm = 0;
             if(search_and_execute_commands(&commands_list) == -1){
-                exit_properly(9);
+                exit(9);
             }
             
         }
@@ -685,21 +690,18 @@ int main(){
         
        
     }
+
+    // remove alarm
     alarm(0);
 
+    // Send sigterm to all period child
     kill(0,SIGTERM);
 
+    // zombies elimination
     if(check_zombie(1) == -1){
-        exit_properly(11);
+        exit(11);
     }
     
-
-
-    printf("l:%d k:%d\n",launched,killed);
-
-    array_destroy(&commands_list);
-    unlink("/tmp/period.pid");
-    
-     
-    return 0;
+    // END
+    exit(0);
 }

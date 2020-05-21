@@ -148,6 +148,10 @@ char **recv_argv(int fd){
     
     // Read each string in the pipe
     char **argv = calloc(size+1,sizeof(char*));
+    if(argv == NULL){
+        fprintf(stderr,"> Error : [recv_argv] - calloc\n");
+        return NULL;
+    }
     for(size_t i = 0 ; i < size ; ++i){
         argv[i] = recv_string(fd);
         if(argv[i] == NULL){
