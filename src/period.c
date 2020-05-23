@@ -262,14 +262,12 @@ int command_redirection(char type,size_t cmdId){
  * Execute a command
  */ 
 int execute_command(struct command cmd, struct array *list){
-   // pid_t period_pid = getpid();
-    //printf("period_pgid : %d\n",getpgid(period_pid));
+   
     pid_t pid = fork();
     
     if(pid == 0){
 
         setpgid(0,getpgid(getppid()));
-        //printf("pid : %d, pgid , period_pgid : %d, child_pgid : %d\n", getpid(),getpgid(getppid()), getpgid(0));
 
         sigset_t empty;
         sigemptyset(&empty);
@@ -294,7 +292,8 @@ int execute_command(struct command cmd, struct array *list){
 
         execvp(cmd.name,cmd.args);
         perror("execvp");
-        exit(1);
+        array_destroy(list);
+        _exit(1);
     }
     return 0;
 }
@@ -528,12 +527,9 @@ int check_zombie(int block){
 
 
 
-volatile sig_atomic_t pid_period = -1;
 
-void exit_properly(int status, struct array *list){
-    if(pid_period == getpid()){
-        unlink("/tmp/period.pid");
-    }
+void exit_properly(int status, struct array *list){  
+    unlink("/tmp/period.pid");
     array_destroy(list);
 }
 
@@ -543,7 +539,7 @@ void exit_properly(int status, struct array *list){
 // MAIN 
 int main(){
     // Write period pid in the file
-    pid_period = write_pid();
+    pid_t pid_period = write_pid();
 
     if(pid_period == -1){
         exit(1);
