@@ -6,8 +6,13 @@
 #include <sys/stat.h>
 
 
+/**
+ * Lauch a command as a daemon
+ * argv : The arguments value
+ */ 
 int daemonize(char *argv[]){
     pid_t pid = fork();
+
     if(pid == -1){
         perror("fork");
         return -1;
@@ -37,10 +42,10 @@ int daemonize(char *argv[]){
                 exit(2);
             }
 
-            // if(fclose(stdin) || fclose(stdout) || fclose(stderr)){
-            //     perror("fclose");
-            //     exit(3);
-            // }
+            if(fclose(stdin) || fclose(stdout) || fclose(stderr)){
+                perror("fclose");
+                exit(3);
+            }
             
             execvp(argv[1],argv+1);
             perror("execvp");
@@ -58,10 +63,20 @@ int daemonize(char *argv[]){
 
 
 
+//MAIN
 int main(int argc, char *argv[]){
+    if(argc == 1){
+        fprintf(stderr,"Error : a command must be specified\nUsage : ./launch_daemon command_absolute_path [args]...\n");
+        return 1 ;
+    }
+
+    if(argv[1][0] != '/'){
+        fprintf(stderr,"Error : the command path must be absolute\nUsage : ./launch_daemon command_absolute_path [args]...\n");
+        return 2;
+    }
 
     if(daemonize(argv) == -1){
-        return 1;
+        return 3;
     }
     return 0;
 }

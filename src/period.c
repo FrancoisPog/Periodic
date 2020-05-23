@@ -70,7 +70,7 @@ int make_pipe(){
             perror("mkfifo");
             return -1;
         }
-        fprintf(stderr,"> Warning [make_pipe]\t- period.pipe already exists\n");
+        //fprintf(stderr,"> Warning [make_pipe]\t- period.pipe already exists\n");
         return 1;  
     }
     return 0;
@@ -89,7 +89,7 @@ int make_dir(){
             perror("mkdir");
             return -1;
         }
-        fprintf(stderr,"> Warning [make_dir]\t- /tmp/period already exists\n");
+        //fprintf(stderr,"> Warning [make_dir]\t- /tmp/period already exists\n");
         return 1;
     }
     return 0;
