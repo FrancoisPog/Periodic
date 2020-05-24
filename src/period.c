@@ -449,7 +449,7 @@ int send_command_array(struct array commands_list){
 
         // Get the argv length
         size_t index = 0;
-        size_t buffsize = 8 + 5 + 10 + 7 + strlen(commands_list.data[i].name);
+        size_t buffsize = 12 + 19 + 10 + 8 + strlen(commands_list.data[i].name);
 
         while(commands_list.data[i].args[index] != NULL){
             buffsize += strlen(commands_list.data[i].args[index])+1;
@@ -463,8 +463,16 @@ int send_command_array(struct array commands_list){
             return -1;
         }
 
+        
+
+        char* time_str = calloc(20,sizeof(char));
+        strftime(time_str,20,"%d/%m/%Y %X",localtime( &commands_list.data[i].next ));
+        
+
         //write the command in the buffer
-        sprintf(buff,"- [%ld] %li %d %s ",commands_list.data[i].id,commands_list.data[i].next,commands_list.data[i].period,commands_list.data[i].name);
+        sprintf(buff,"- [%ld] | %s | %d | %s ",commands_list.data[i].id,time_str,commands_list.data[i].period,commands_list.data[i].name);
+
+        free(time_str);
 
         //write the command's arguments in the buffer
         for(size_t k = 0 ; k < index ; ++k){
@@ -538,6 +546,13 @@ void exit_properly(int status, struct array *list){
 
 // MAIN 
 int main(){
+
+    // Redirection of period I/O 
+    if(period_redirection() == -1){
+        exit(7);
+    }
+
+    
     // Write period pid in the file
     pid_t pid_period = write_pid();
 
@@ -554,10 +569,7 @@ int main(){
     // Set the exit handler
     on_exit(( void (*)( int , void * ) )exit_properly,&commands_list);
 
-    // Redirection of period I/O 
-    if(period_redirection() == -1){
-        exit(7);
-    }
+   
 
     // Pipe creation
     if(make_pipe() == -1){

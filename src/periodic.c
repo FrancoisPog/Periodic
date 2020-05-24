@@ -292,6 +292,14 @@ int recv_command_array(pid_t pid){
         return -1;
     }
 
+    char* now_str = calloc(20,sizeof(char));
+    time_t now = time(NULL);
+    strftime(now_str,20,"%d/%m/%Y %X",localtime(&now));
+    
+    printf("Actual time : %s\n",now_str);
+    free(now_str);
+
+
     size_t i = 0;
     while(list[i] != NULL){
         printf("%s\n",list[i]);
