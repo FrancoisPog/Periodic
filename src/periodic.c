@@ -18,6 +18,9 @@
 
 /**
  * Check the arguments and determine the start, the period, the command and its arguments.  
+ * argc : The number of arguments
+ * argv : The arguments values
+ * cmd,args,start,period : All command's data to set
  * Return :
  *      > 0 if arguments are valid
  *      > 1 if arguments aren't valid
@@ -41,8 +44,6 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
     // Get the start value
     char **endptr = calloc_perror(1,sizeof(char *));
     
-
-
     if(strcmp(argv[1],"now") == 0){
         *start = time(NULL);
     }else{
@@ -99,6 +100,12 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
 
 /**
  * Send a command to period
+ * cmd,args,start,period : All command's data
+ * pipe : The pipe used
+ * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
  */ 
 int send_command(char *cmd, char **args, time_t start, int period,int pipe){
 
@@ -121,10 +128,19 @@ int send_command(char *cmd, char **args, time_t start, int period,int pipe){
         return -1;
     }
 
-    
     return 0;
 }
 
+/**
+ * Execute the process to send a command to period
+ * argc : The number of arguments
+ * argv : The arguments values
+ * pid_period : The current period pid
+ * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
+ */ 
 int add_command(int argc, char *argv[],int pid_period){
     // check and get arguments values
     time_t start = -1;
@@ -136,12 +152,11 @@ int add_command(int argc, char *argv[],int pid_period){
     }
 
     // Send the USR1 signal to period
-    kill(pid_period,SIGUSR1);
+    kill_perror(pid_period,SIGUSR1);
 
     // Pipe opening
-    int pipe = open_perror("/tmp/period.fifo",O_WRONLY);
+    int pipe = open_perror("/tmp/period.fifo",O_WRONLY, S_IRUSR | S_IWUSR);
     
-
     // Send the command's information
     if(send_command(cmd,args,start,period,pipe) == -1){
         return -1;
@@ -152,6 +167,15 @@ int add_command(int argc, char *argv[],int pid_period){
     return 0;
 }
 
+/**
+ * Execute the process to send the command's id to remove to period
+ * command_id_str : The id of command to remove in String
+ * pid_period : The current period pid
+ * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
+ */ 
 int remove_command(char *command_id_str,int pid_period){
     char *usage = "Usage : ./periodic\nUsage : ./periodic start period cmd [arg]...\nUsage : ./periodic remove command_id" ;
     if(command_id_str == NULL){
@@ -159,7 +183,6 @@ int remove_command(char *command_id_str,int pid_period){
         return -1;
     }
     
-
     char **endptr = calloc_perror(1,sizeof(char *));
    
     ssize_t command_id = strtoll(command_id_str,endptr,10);
@@ -177,16 +200,16 @@ int remove_command(char *command_id_str,int pid_period){
     }
 
     // Send the USR1 signal to period
-    kill(pid_period,SIGUSR1);
+    kill_perror(pid_period,SIGUSR1);
 
     // Pipe opening
-    int pipe = open_perror("/tmp/period.fifo",O_WRONLY);
+    int pipe = open_perror("/tmp/period.fifo",O_WRONLY,S_IRUSR | S_IWUSR);
 
+    // Write the process code
     short code = 1;
     write_perror(pipe,&code,sizeof(short));
 
-    //printf("id : %lld\n",command_id);
-
+    // Write the id
     write_perror(pipe,&command_id,sizeof(size_t));
 
     close_perror(pipe);
@@ -195,26 +218,34 @@ int remove_command(char *command_id_str,int pid_period){
 }
 
 /**
- * Receive a command from periodic
+ * Request the command array from periodic and print it
+ * pid : The current period pid
+ * Return :
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
  */ 
 int recv_command_array(pid_t pid){
+    // Send sigusr2 to period
     kill_perror(pid,SIGUSR2);
 
-    int pipe = open_perror("/tmp/period.fifo",O_RDONLY);
+    // Pipe opening
+    int pipe = open_perror("/tmp/period.fifo",O_RDONLY,S_IRUSR | S_IWUSR);
     
+    // Receive the array
     char** list = recv_argv(pipe);
     if(list == NULL){
         return -1;
     }
 
+    // Print the actual time
     char* now_str = calloc_perror(20,sizeof(char));
     time_t now = time(NULL);
     strftime(now_str,20,"%d/%m/%Y %X",localtime(&now));
-    
     printf("Actual time : %s\n",now_str);
     free(now_str);
 
-
+    // Print the array
     size_t i = 0;
     while(list[i] != NULL){
         printf("%s\n",list[i]);
@@ -223,44 +254,37 @@ int recv_command_array(pid_t pid){
     
     free(list);
     close_perror(pipe);
-
     return 0;
 }
 
 
 // MAIN
 int main(int argc, char *argv[]){
-
-    // printf("pid : %d\n",get_period_pid());
+    
+    // Get the period pid
     pid_t pid_period = get_period_pid();
     if(pid_period == 0){
         fprintf(stderr,"Error : Period isn't running\n");
         return 1;
     }
 
-    //if periodic used alone -> get command list
+    //If periodic used alone -> get command list
     if(argc == 1){
         // Send the USR2 signal to period
         if(recv_command_array(pid_period) == -1){
-            return 3;
+            return 2;
         }
     }else{
+        // If the first argument is 'remove'
         if(!strcmp(argv[1],"remove")){
-            //printf("remove\n");
             if(remove_command(argv[2],pid_period) == -1){
-                return 4;
+                return 3;
             }
         }else{
-            //printf("add\n");
             if(add_command(argc,argv,pid_period) == -1){
-                return 5;
+                return 4;
             }
         }
-
-        
-        
     }
-    
-
     return 0;           
 }

@@ -26,7 +26,8 @@ volatile sig_atomic_t stop = 0;
 
 
 /**
- * Handler for SIGUSR1 and SIGUSR2
+ * Handler for all signals, set the flags of received signal
+ * sig : The signal number
  */
 void hand_sigusr(int sig){
     if(sig == SIGUSR1){
@@ -47,20 +48,27 @@ void hand_sigusr(int sig){
 
 /**
  * Receive a command from periodic
+ * cmd : The command to set
+ * id : The command's id
+ * pipe : The pipe used
+ * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
  */ 
 int recv_command(struct command *cmd, size_t id, int pipe){
     
     time_t start;
-    int n = read(pipe,&start,sizeof(time_t));
-    if(n <= 0){
-        perror("read");
+    int n = read_perror(pipe,&start,sizeof(time_t));
+    if(n == 0){
+        fprintf(stderr,"Error : invalid start received\n");
         return -1;
     }
 
     int period;
-    n = read(pipe,&period,sizeof(int));
-    if(n <= 0){
-        perror("read");
+    n = read_perror(pipe,&period,sizeof(int));
+    if(n == 0){
+        fprintf(stderr,"Error : invalid period received\n");
         return -1;
     }
 
@@ -80,8 +88,6 @@ int recv_command(struct command *cmd, size_t id, int pipe){
     cmd->name = name;
     cmd->args = args;
 
-    
-    
     return 0;
 }
 
@@ -89,11 +95,16 @@ int recv_command(struct command *cmd, size_t id, int pipe){
 
 
 /**
- * Execute a command
+ * Execute a command in a new process
+ * cmd : The command to execute
+ * list : The command list
+ * Return : 
+ *      > void on success
+ *      > exit on syscall failure
  */ 
-int execute_command(struct command cmd, struct array *list){
+void execute_command(struct command cmd, struct array *list){
    
-    pid_t pid = fork();
+    pid_t pid = fork_perror();
     
     if(pid == 0){
         // Here we can't use libperror because we want to use _exit() instead of exit()
@@ -121,8 +132,6 @@ int execute_command(struct command cmd, struct array *list){
         dflt.sa_handler = SIG_DFL;
         dflt.sa_flags = 0;
 
-        
-
         if(sigaction(SIGTERM,&dflt,NULL) == -1){
             perror("sigaction");
             _exit(EXIT_FAILURE);
@@ -149,27 +158,32 @@ int execute_command(struct command cmd, struct array *list){
         array_destroy(list);
         _exit(1);
     }
-    return 0;
 }
 
 /**
- * Execute the next command(s) to execute and set an alarm after
+ * Set the next alarm and execute commands
+ * list : The command list
  */ 
-int search_and_execute_commands(struct array *list){
+void search_and_execute_commands(struct array *list){
     int timer = 0;
     size_t next_cmd_index;
     while(timer <= 0){
+        // If empty list
         if(list->size == 0){
             alarm(0);
-            return 0;
+            return;
         }
+
         next_cmd_index = -1;
         for(size_t i = 0 ; i < list->size ; ++i ){
+            // If the next execution timestamp of the current command is less or equals to the current timestamp
             if(list->data[i].next <= time(NULL) && list->data[i].next != 0){
-                if(execute_command(list->data[i], list) == -1){
-                    return -1;
-                }
+                execute_command(list->data[i], list);
+
+                // Update the next timestamp
                 list->data[i].next = time(NULL) + list->data[i].period;
+
+                // If the period is 0, remove the command 
                 if(list->data[i].period == 0){
                     array_remove(list,list->data[i].id);
                     --i;
@@ -177,6 +191,7 @@ int search_and_execute_commands(struct array *list){
                 }
             }
 
+            // Search the closer command to execute
             if(next_cmd_index == -1 ||  (list->data[i].next < list->data[next_cmd_index].next && list->data[i].next != 0)){
                 next_cmd_index = i;
             }
@@ -189,34 +204,42 @@ int search_and_execute_commands(struct array *list){
         timer =  list->data[next_cmd_index].next - time(NULL);
     }
     
+    // Set the timer for the next command execution
     alarm((unsigned)timer);
 
-    return 0;
+    return;
 }
 
 
 
 /**
  * Add a command in the list and set alarm
+ * cmd : The command to add
+ * list : The commands list
  */ 
-int add_command(struct command cmd, struct array *list){
-    
-    if(array_add(list,cmd) == -1){
-        return -1;
-    }
-    
-    return search_and_execute_commands(list);
+void add_command(struct command cmd, struct array *list){
+    array_add(list,cmd);
+    search_and_execute_commands(list);
 }
 
-
+/**
+ * Execute the process when sigusr1 is received
+ * commands_list : The command list
+ * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
+ */ 
 int usr1_process(struct array *commands_list){
     short code = -1;
     
-    
+    // Pipe opening
     int pipe = open_perror("/tmp/period.fifo",O_RDONLY, S_IRUSR | S_IWUSR);
 
+    // Read the code from periodic
     read_perror(pipe,&code,sizeof(short));
 
+    // If code == 1
     if(!code){
         size_t static count = 0;
         struct command cmd;
@@ -229,20 +252,20 @@ int usr1_process(struct array *commands_list){
         close_perror(pipe);
 
         // Add command in array
-        if(add_command(cmd,commands_list) == -1){
-            return -1;
-        }
+        add_command(cmd,commands_list);
+           
+        
 
     }else{
         size_t id;
+
+        // Read the command id from periodic
         read_perror(pipe,&id,sizeof(size_t));
 
         close_perror(pipe);
 
-        if(array_remove(commands_list,id) == -1){
-            return -1;
-        }
-
+        //Remove the command in the list
+        array_remove(commands_list,id);
     }
 
     return 0;
@@ -252,18 +275,24 @@ int usr1_process(struct array *commands_list){
 
 /**
  * Send the array of command to periodic
+ * commands_list : The commands list
+ * * Return : 
+ *      > 0 on success
+ *      > -1 on errors
+ *      > exit on syscall failure
  */ 
 int send_command_array(struct array commands_list){
 
+    // Pipe opening
     int pipe = open_perror("/tmp/period.fifo",O_WRONLY, S_IRUSR | S_IWUSR);
     
-
+    // If the list is empty
     if(commands_list.size == 0){
         char **tmp = calloc(2,sizeof(char*));
         if(tmp == NULL){
             perror("calloc");
             close(pipe);
-            return -1;
+            exit(EXIT_FAILURE);
         }
         tmp[0] = "No command in the list";
         tmp[1] = NULL;
@@ -273,17 +302,15 @@ int send_command_array(struct array commands_list){
         return 0;
     }
     
-
     char** list = calloc(commands_list.size+1,sizeof(char*));
     if(list == NULL){
         perror("calloc");
         close_perror(pipe);
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     for (size_t i = 0; i < commands_list.size ; i++){
-
-        // Get the argv length
+        // Get the command string length
         size_t index = 0;
         size_t buffsize = 12 + 19 + 10 + 8 + strlen(commands_list.data[i].name);
 
@@ -300,7 +327,7 @@ int send_command_array(struct array commands_list){
         }
 
         
-
+        // get the current time and parse it in string
         char* time_str = calloc_perror(20,sizeof(char));
         strftime(time_str,20,"%d/%m/%Y %X",localtime( &commands_list.data[i].next ));
         
@@ -339,7 +366,14 @@ int send_command_array(struct array commands_list){
     return 0;
 }
 
-int check_zombie(int block){
+/**
+ * Check is there are zombie to kill and kill them
+ * block : If id > 0, the wait call will be blocking
+ * Return : 
+ *      > void on success
+ *      > exit on syscall failure
+ */ 
+void check_zombie(int block){
     while(1){
         int wstatus;
         pid_t pid;
@@ -352,7 +386,7 @@ int check_zombie(int block){
         if(pid <= 0){
             if(pid == -1 && errno != ECHILD){
                 perror("waitpid");
-                return -1;
+                exit(EXIT_FAILURE);
             }
             break;
         }
@@ -363,12 +397,11 @@ int check_zombie(int block){
             fprintf(stderr,"%d : End by signal n°%d\n",pid, WTERMSIG(wstatus));
         }
     }
-    return 0;
 }
 
-
-
-
+/**
+ * Exit the program properly by unlinking period.pid and destroy the command list
+ */ 
 void exit_properly(int status, struct array *list){  
     unlink("/tmp/period.pid");
     array_destroy(list);
@@ -379,26 +412,20 @@ void exit_properly(int status, struct array *list){
 
 // MAIN 
 int main(){
-
     // Redirection of period I/O 
-    if(period_redirection() == -1){
-        exit(7);
-    }
+    period_redirection();
 
     
     // Write period pid in the file
     pid_t pid_period = write_pid();
-
     if(pid_period == -1){
         exit(1);
     }
 
     // Commands list creation
     struct array commands_list;
-    if(array_create(&commands_list) == -1){
-        exit(14);
-    }
-
+    array_create(&commands_list);
+        
     // Set the exit handler
     on_exit(( void (*)( int , void * ) )exit_properly,&commands_list);
 
@@ -447,6 +474,7 @@ int main(){
     sigset_t empty_set;
     sigemptyset_perror(&empty_set);
 
+
     while(!stop){
         
         if(sigsuspend(&empty_set) == -1 && errno != EINTR){
@@ -455,14 +483,8 @@ int main(){
         }
 
         if(chld){
-            if(check_zombie(0) == -1){
-                exit(10);
-            }            
+            check_zombie(0);         
             chld = 0;
-        }
-
-        if(stop){
-            break;
         }
 
         if(usr1){
@@ -472,7 +494,6 @@ int main(){
             usr1 = 0;
         }
         if (usr2){
-
             if(send_command_array(commands_list) == -1){
                 exit(8);
             }
@@ -481,14 +502,8 @@ int main(){
         
         if(alrm){
             alrm = 0;
-            if(search_and_execute_commands(&commands_list) == -1){
-                exit(9);
-            }
-            
+            search_and_execute_commands(&commands_list);
         }
-
-        
-       
     }
 
     // remove alarm
@@ -498,9 +513,7 @@ int main(){
     kill_perror(0,SIGTERM);
 
     // zombies elimination
-    if(check_zombie(1) == -1){
-        exit(11);
-    }
+    check_zombie(1);
     
     // END
     exit(0);

@@ -2,10 +2,23 @@ CC=gcc
 CFLAGS=-Wall -std=c99 -g -Iinclude
 SRCDIR=src
 OBJDIR=object
+PROGRAMS = period periodic launch_daemon
+LIBS = libmessage.so libperror.so
+OTHER = now when
 
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
-all : period periodic launch_daemon
+.PHONY : all
+all : $(PROGRAMS) $(LIBS) $(OTHER)
+
+.PHONY : prog
+prog : $(PROGRAMS)
+
+.PHONY : lib
+lib : $(LIBS)
+
+.PHONY : other
+other : $(OTHER)
 
 
 periodic : $(OBJDIR)/periodic.o libmessage.so libperror.so $(OBJDIR)/file.o
@@ -26,6 +39,7 @@ $(OBJDIR)/message.o : $(SRCDIR)/message.c
 	@echo make : $@
 	@$(CC) $(CFLAGS) -fPIC -c -o $@ $<
 
+
 $(OBJDIR)/perror.o : $(SRCDIR)/perror.c
 	@echo make : $@
 	@$(CC) $(CFLAGS) -fPIC -c -o $@ $<
@@ -35,11 +49,17 @@ $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@echo make : $@
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-% : $(SRCDIR)/%.c 
+
+% : $(SRCDIR)/%.c
 	@echo make : $@
 	@$(CC) $(CFLAGS) -o $@ $<
 
 
+.PHONY : clean
 clean : 
-	rm -f *.o
+	rm -f $(OBJDIR)/*.o
 
+
+.PHONY : mrproper
+mrproper : clean
+	rm -f $(PROGRAMS) $(LIBS) $(OTHER)

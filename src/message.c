@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 1
 #include "message.h"
 #include "perror.h"
 #include <stdio.h>
@@ -5,9 +6,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-/**
- * Send a string in a pipe
- */
+
 int send_string(int fd, const char *str){
     // Check parameters
     if(fd < 0){
@@ -31,9 +30,7 @@ int send_string(int fd, const char *str){
     return 0;
 }
 
-/**
- * Receive a string from a pipe
- */
+
 char *recv_string(int fd){
     // Check parameters
     if(fd < 0){
@@ -59,9 +56,7 @@ char *recv_string(int fd){
 
 
 
-/**
- * Send an array of string in a pipe
- */
+
 int send_argv(int fd, char *argv[]){
     // Check parameters
     if(fd < 0){
@@ -97,9 +92,7 @@ int send_argv(int fd, char *argv[]){
 }
 
 
-/**
- * Receive an array of string from a pipe
- */
+
 char **recv_argv(int fd){
     // Check parameters
     if(fd < 0){

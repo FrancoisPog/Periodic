@@ -1,9 +1,11 @@
+#define _POSIX_C_SOURCE 1
 #include "command.h"
+#include "perror.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// COMMAND
 
 void command_create(struct command *self,size_t id, char *name, char **args, int period, time_t start){
     if(self == NULL || name == NULL || args == NULL){
@@ -45,21 +47,13 @@ void command_print(struct command *self){
     printf(" >\n");
 }
 
-// ARRAY
 
-int array_create(struct array *self){
-    if(self == NULL){
-        return -1;
-    }
+void array_create(struct array *self){
+    assert(self!=NULL);
     
     self->capacity = 10;
     self->size = 0;
-    self->data = calloc(self->capacity, sizeof(struct command));
-    if(self->data == NULL){
-        perror("calloc");
-        return -1;
-    }
-    return 0;
+    self->data = calloc_perror(self->capacity, sizeof(struct command));
 
 }
 
@@ -77,35 +71,24 @@ void array_destroy(struct array *self){
     self->size = 0;
 }
 
-int array_add(struct array *self, struct command cmd){
-    if(self == NULL){
-        return -1;
-    }
+void array_add(struct array *self, struct command cmd){
+    assert(self!=NULL);
 
     if(self->size == self->capacity){
 		self->capacity *= 2;
-		struct command *data = calloc(self->capacity, sizeof(struct command));
-        if(data == NULL){
-            perror("calloc");
-            return -1;
-        }
+		struct command *data = calloc_perror(self->capacity, sizeof(struct command));
 		memcpy(data, self->data, self->size * sizeof(struct command));
 		free(self->data);
 		self->data = data;
 	}
 	self->data[self->size] = cmd;
 	self->size ++;
-    return 0;
-
 }
 
-int array_remove(struct array *self, int id){
-    if(self == NULL){
-        return -1;
-    }
+void array_remove(struct array *self, int id){
+    assert(self!=NULL);
 
     int found = 0;
-
     for(size_t i = 0 ; i < self->size ; ++i){
         if(self->data[i].id == id){
             found = 1;
@@ -119,25 +102,18 @@ int array_remove(struct array *self, int id){
     }
 
     if(!found){
-        return 0;
+        return;
     }
 
     self->size--;
 
     if(self->capacity > 10 && self->size < (self->capacity)/2){
 		self->capacity /= 2;
-		struct command *data = calloc(self->capacity, sizeof(struct command));
-        if(data == NULL){
-            perror("calloc");
-            return -1;
-        }
+		struct command *data = calloc_perror(self->capacity, sizeof(struct command));
 		memcpy(data, self->data, self->size * sizeof(struct command));
 		free(self->data);
 		self->data = data;
-	}
-
-    return 0;
-    
+    }    
 }
 
 

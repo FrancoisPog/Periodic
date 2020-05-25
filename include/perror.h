@@ -1,10 +1,6 @@
 #ifndef PERROR_H
 #define PERROR_H
 
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 1
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -37,6 +33,8 @@ void sigaddset_perror(sigset_t *set, int sig);
 ssize_t read_perror(int fd,void *buf, size_t nbytes);
 
 int kill_perror(pid_t pid, int sig);
+
+pid_t fork_perror();
 
 
 #endif

@@ -6,9 +6,9 @@
 /**
  * Get the PID of the current period process.
  * Return : 
- *      > 0 if period is not running
  *      > The PID if period is running  
- *      > -1 if error
+ *      > 0 if period is not running
+ *      > exit on syscall failure
  */
 int get_period_pid();
 
@@ -16,8 +16,9 @@ int get_period_pid();
 /**
  * Check if period is already running, otherwise create /tmp/period.pid and write the pid inside
  * Return : 
- *      > The pid 
- *      > -1 if an error has occured (or period is already running)
+ *      > The pid written
+ *      > -1 if period is already running
+ *      > exit on syscall failure
  */ 
 int write_pid();
 
@@ -27,7 +28,7 @@ int write_pid();
  * Return : 
  *      > 0 if success
  *      > 1 if already exists
- *      > -1 if errors
+ *      > exit on syscall failure
  */ 
 int make_pipe();
 
@@ -36,12 +37,27 @@ int make_pipe();
  * Return : 
  *      > 0 if success
  *      > 1 if already exists
- *      > -1 if errors
+ *      > exit on syscall failure
  */ 
 int make_dir();
 
-int period_redirection();
+/**
+ * Do the period redirection
+ * Return : 
+ *      > void on success
+ *      > exit on syscall failure
+ */ 
+void period_redirection();
 
+/**
+ * Do the command's redirection
+ * type : The fd to redirect (input:i/output:o/error:o)
+ * cmId : The command's id to redirects
+ * Return : 
+ *      > 0 on success
+ *      > -1 if bad type
+ *      > exit on syscall failure
+ */ 
 int command_redirection(char type,size_t cmdId);
 
 #endif

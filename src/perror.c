@@ -1,10 +1,15 @@
+#define _POSIX_C_SOURCE 1
 #include "perror.h"
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+/**
+ * this compilation unit is used to avoid checking the return of the system call in case of failure,
+ * all the usual system calls are suffixed by _perror, but the arguments are the same as the original function
+ */ 
 
 void *calloc_perror(size_t n, size_t size){
     void *res = calloc(n,size);
@@ -108,4 +113,13 @@ int kill_perror(pid_t pid, int sig){
         exit(EXIT_FAILURE);
     }
     return res;
+}
+
+pid_t fork_perror(){
+    pid_t pid = fork();
+    if(pid == -1){
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+    return pid;
 }

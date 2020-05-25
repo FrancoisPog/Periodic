@@ -26,12 +26,11 @@ int write_pid(){
     
     if(errno != ENOENT){
         perror("fopen");
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     // Write the pid inside
     file = fopen_perror("/tmp/period.pid","w");
-    
     fprintf(file,"%i",pid);
 
     fclose_perror(file);
@@ -42,10 +41,11 @@ int write_pid(){
 
 int make_pipe(){
     if(mkfifo("/tmp/period.fifo",0777) == -1){
-        if(errno !=  EEXIST){
+        if(errno !=  EEXIST){ 
             perror("mkfifo");
-            return -1;
+            exit(EXIT_FAILURE);
         }
+        // if already exists
         return 1;  
     }
     return 0;
@@ -56,8 +56,9 @@ int make_dir(){
     if(mkdir("/tmp/period",0777) == -1){
         if(errno != EEXIST){
             perror("mkdir");
-            return -1;
+            exit(EXIT_FAILURE);
         }
+        // if already exists
         return 1;
     }
     return 0;
@@ -65,7 +66,7 @@ int make_dir(){
 
 
 
-int period_redirection(){
+void period_redirection(){
     int err = open_perror("/tmp/period.err",O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     dup2_perror(err,STDERR_FILENO);
     close_perror(err);
@@ -73,13 +74,9 @@ int period_redirection(){
     int out = open_perror("/tmp/period.out",O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     dup2_perror(out,STDOUT_FILENO);
     close_perror(out);
-
-    return 0;
 }
 
-/**
- * Redirects the standards file descriptor
- */ 
+
 int command_redirection(char type,size_t cmdId){
     if(type != 'i' && type != 'o' && type != 'e'){
         return -1;
@@ -112,20 +109,20 @@ int command_redirection(char type,size_t cmdId){
     int out = open_perror(buf,O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     dup2_perror(out, fd);
     close_perror(out);
-
     return 0;
 }
 
 
 int get_period_pid(){
     FILE *file = fopen("/tmp/period.pid","r");
+
     // Test if the file exists or if an error has occured
     if(file == NULL){
         if(errno == ENOENT){
             return 0;
         }
         perror("open");
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     // Read the pid
@@ -133,7 +130,6 @@ int get_period_pid(){
     int n = fread(buf,sizeof(char),8,file);
 
     if(!n){ // Nothing to read
-        fprintf(stderr,"> Error [get_period_pid] - '/tmp/period.pid' is empty\n");
         fclose_perror(file);
         exit(EXIT_FAILURE);
     }
