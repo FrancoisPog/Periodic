@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <sys/types.h>
 
-#define EXIT_NO 2
+
 
 void *calloc_perror(size_t n, size_t size);
 

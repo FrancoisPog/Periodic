@@ -99,24 +99,24 @@ int execute_command(struct command cmd, struct array *list){
         // Here we can't use libperror because we want to use _exit() instead of exit()
         if(setpgid(0,getpgid(getppid())) == -1){
             perror("setpgid");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
 
         sigset_t empty;
         if(sigemptyset(&empty) == -1){
             perror("sigemptyset");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
         
         if(sigprocmask(SIG_SETMASK,&empty,NULL)==-1){
             perror("sigprocmask");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
 
         struct sigaction dflt;
         if(sigemptyset(&dflt.sa_mask) == -1){
             perror("sigemptyset");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
         dflt.sa_handler = SIG_DFL;
         dflt.sa_flags = 0;
@@ -125,17 +125,17 @@ int execute_command(struct command cmd, struct array *list){
 
         if(sigaction(SIGTERM,&dflt,NULL) == -1){
             perror("sigaction");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
 
         if(sigaction(SIGINT,&dflt,NULL) == -1){
             perror("sigaction");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
 
         if(sigaction(SIGQUIT,&dflt,NULL) == -1){
             perror("sigaction");
-            _exit(EXIT_NO);
+            _exit(EXIT_FAILURE);
         }
 
         command_redirection('o',cmd.id);
@@ -214,7 +214,7 @@ int usr1_process(struct array *commands_list){
     
     
     int pipe = open_perror("/tmp/period.fifo",O_RDONLY, S_IRUSR | S_IWUSR);
-    
+
     read_perror(pipe,&code,sizeof(short));
 
     if(!code){

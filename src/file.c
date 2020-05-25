@@ -135,7 +135,7 @@ int get_period_pid(){
     if(!n){ // Nothing to read
         fprintf(stderr,"> Error [get_period_pid] - '/tmp/period.pid' is empty\n");
         fclose_perror(file);
-        exit(EXIT_NO);
+        exit(EXIT_FAILURE);
     }
 
     fclose_perror(file);
