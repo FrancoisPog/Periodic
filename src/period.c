@@ -3,6 +3,8 @@
 #define _DEFAULT_SOURCE 1
 #include "message.h"
 #include "command.h"
+#include "file.h"
+#include "perror.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -16,130 +18,10 @@
 #include <assert.h>
 
 
-
-/**
- * Check if period is already running, otherwise create /tmp/period.pid and write the pid inside
- * Return : 
- *      > The pid 
- *      > -1 if an error has occured (or period is already running)
- */ 
-int write_pid(){
-    // Get the pid
-    pid_t pid = getpid();
-
-    // Check is period.pid already exists
-    FILE *file = fopen("/tmp/period.pid","r");
-    if(file != NULL){
-        fprintf(stderr,"> Error [write_pid] - period is already running\n");
-        fclose(file);
-        return -1;
-    }
-    
-    if(errno != ENOENT){
-        perror("fopen");
-        return -1;
-    }
-
-    // Write the pid inside
-    file = fopen("/tmp/period.pid","w");
-    if(file == NULL){
-        perror("fopen");
-        return -1;
-    }
-
-    fprintf(file,"%i",pid);
-
-    if(fclose(file) == -1){
-        perror("fclose");
-        return -1;
-    }
-
-    return pid;
-}
-
-/**
- * Create the pipe only if it doesn't already exists
- * Return : 
- *      > 0 if success
- *      > 1 if already exists
- *      > -1 if errors
- */ 
-int make_pipe(){
-    if(mkfifo("/tmp/period.fifo",0777) == -1){
-        if(errno !=  EEXIST){
-            perror("mkfifo");
-            return -1;
-        }
-        //fprintf(stderr,"> Warning [make_pipe]\t- period.pipe already exists\n");
-        return 1;  
-    }
-    return 0;
-}
-
-/**
- * Create the directory only if it doesn't already exists
- * Return : 
- *      > 0 if success
- *      > 1 if already exists
- *      > -1 if errors
- */ 
-int make_dir(){
-    if(mkdir("/tmp/period",0777) == -1){
-        if(errno != EEXIST){
-            perror("mkdir");
-            return -1;
-        }
-        //fprintf(stderr,"> Warning [make_dir]\t- /tmp/period already exists\n");
-        return 1;
-    }
-    return 0;
-}
-
-
-
-int period_redirection(){
-
-    int err = open("/tmp/period.err",O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
-    if(err == -1){
-        perror("open");
-        return -1;
-    }
-
-    if(dup2(err,STDERR_FILENO) == -1){
-        perror("dup2");
-        return -1;
-    }
-
-    if(close(err) == -1){
-        perror("close");
-        return -1;
-    }
-
-    int out = open("/tmp/period.out",O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
-    if(out == -1){
-        perror("open");
-        return -1;
-    }
-
-    if(dup2(out,STDOUT_FILENO) == -1){
-        perror("dup2");
-        return -1;
-    }
-
-    if(close(out) == -1){
-        perror("close");
-        return -1;
-    }
-
-    return 0;
-}
-
 volatile sig_atomic_t usr1 = 0;
 volatile sig_atomic_t usr2 = 0;
-
 volatile sig_atomic_t alrm = 0; 
 volatile sig_atomic_t chld = 0;
-
 volatile sig_atomic_t stop = 0;
 
 
@@ -163,9 +45,6 @@ void hand_sigusr(int sig){
 }
 
 
-
-
-
 /**
  * Receive a command from periodic
  */ 
@@ -174,14 +53,14 @@ int recv_command(struct command *cmd, size_t id, int pipe){
     time_t start;
     int n = read(pipe,&start,sizeof(time_t));
     if(n <= 0){
-        perror("read [start]");
+        perror("read");
         return -1;
     }
 
     int period;
     n = read(pipe,&period,sizeof(int));
     if(n <= 0){
-        perror("read [period]");
+        perror("read");
         return -1;
     }
 
@@ -206,56 +85,7 @@ int recv_command(struct command *cmd, size_t id, int pipe){
     return 0;
 }
 
-/**
- * Redirects the standards file descriptor
- */ 
-int command_redirection(char type,size_t cmdId){
-    if(type != 'i' && type != 'o' && type != 'e'){
-        return -1;
-    }
 
-    int fd = -1;
-    char buf[32];
-    switch(type){
-        case 'i' : {
-            sprintf(buf,"/dev/null");
-            fd = STDIN_FILENO;
-            break;
-        }
-        case 'o' : {
-            sprintf(buf,"/tmp/period/%zd.out",cmdId);
-            fd = STDOUT_FILENO;
-            break;
-        }
-        case 'e' : {
-            sprintf(buf,"/tmp/period/%zd.err",cmdId);
-            fd = STDERR_FILENO;
-            break;
-        }
-        default : {
-            assert(0);
-        }
-    }
-    assert(fd != -1);
-
-    int out = open(buf,O_WRONLY | O_CREAT | O_APPEND,S_IRUSR | S_IWUSR);
-    if(out == -1){
-        perror("open");
-        exit(1);
-    }
-
-    if(dup2(out, fd) == -1){
-        perror("dup2");
-        exit(2);
-    }
-
-    if(close(out) == -1){
-        perror("close");
-        exit(3);
-    }
-
-    return 0;
-}
 
 
 /**
@@ -266,23 +96,47 @@ int execute_command(struct command cmd, struct array *list){
     pid_t pid = fork();
     
     if(pid == 0){
-
-        setpgid(0,getpgid(getppid()));
+        // Here we can't use libperror because we want to use _exit() instead of exit()
+        if(setpgid(0,getpgid(getppid())) == -1){
+            perror("setpgid");
+            _exit(EXIT_NO);
+        }
 
         sigset_t empty;
-        sigemptyset(&empty);
-        sigprocmask(SIG_SETMASK,&empty,NULL);
+        if(sigemptyset(&empty) == -1){
+            perror("sigemptyset");
+            _exit(EXIT_NO);
+        }
+        
+        if(sigprocmask(SIG_SETMASK,&empty,NULL)==-1){
+            perror("sigprocmask");
+            _exit(EXIT_NO);
+        }
 
         struct sigaction dflt;
-        sigemptyset(&dflt.sa_mask);
+        if(sigemptyset(&dflt.sa_mask) == -1){
+            perror("sigemptyset");
+            _exit(EXIT_NO);
+        }
         dflt.sa_handler = SIG_DFL;
         dflt.sa_flags = 0;
 
         
 
-        sigaction(SIGTERM,&dflt,NULL);
-        sigaction(SIGINT,&dflt,NULL);
-        sigaction(SIGQUIT,&dflt,NULL);
+        if(sigaction(SIGTERM,&dflt,NULL) == -1){
+            perror("sigaction");
+            _exit(EXIT_NO);
+        }
+
+        if(sigaction(SIGINT,&dflt,NULL) == -1){
+            perror("sigaction");
+            _exit(EXIT_NO);
+        }
+
+        if(sigaction(SIGQUIT,&dflt,NULL) == -1){
+            perror("sigaction");
+            _exit(EXIT_NO);
+        }
 
         command_redirection('o',cmd.id);
         command_redirection('e',cmd.id);
@@ -359,16 +213,9 @@ int usr1_process(struct array *commands_list){
     short code = -1;
     
     
-    int pipe = open("/tmp/period.fifo",O_RDONLY);
-    if(pipe == -1){
-        perror("open");
-        return -1;
-    }
-
-    if(read(pipe,&code,sizeof(short)) == -1){
-        perror("read");
-        return -1;
-    }
+    int pipe = open_perror("/tmp/period.fifo",O_RDONLY, S_IRUSR | S_IWUSR);
+    
+    read_perror(pipe,&code,sizeof(short));
 
     if(!code){
         size_t static count = 0;
@@ -379,10 +226,7 @@ int usr1_process(struct array *commands_list){
             return -1;
         }
 
-        if(close(pipe) == -1){
-            perror("close");
-            return -1;
-        }
+        close_perror(pipe);
 
         // Add command in array
         if(add_command(cmd,commands_list) == -1){
@@ -391,14 +235,9 @@ int usr1_process(struct array *commands_list){
 
     }else{
         size_t id;
-        if(read(pipe,&id,sizeof(size_t)) == -1){
-            return -1;
-        }
+        read_perror(pipe,&id,sizeof(size_t));
 
-        if(close(pipe) == -1){
-            perror("close");
-            return -1;
-        }
+        close_perror(pipe);
 
         if(array_remove(commands_list,id) == -1){
             return -1;
@@ -416,11 +255,8 @@ int usr1_process(struct array *commands_list){
  */ 
 int send_command_array(struct array commands_list){
 
-    int pipe = open("/tmp/period.fifo",O_WRONLY);
-    if(pipe == -1){
-        perror("open");
-        return -1;
-    }
+    int pipe = open_perror("/tmp/period.fifo",O_WRONLY, S_IRUSR | S_IWUSR);
+    
 
     if(commands_list.size == 0){
         char **tmp = calloc(2,sizeof(char*));
@@ -433,7 +269,7 @@ int send_command_array(struct array commands_list){
         tmp[1] = NULL;
         send_argv(pipe,tmp);
         free(tmp);
-        close(pipe);
+        close_perror(pipe);
         return 0;
     }
     
@@ -441,7 +277,7 @@ int send_command_array(struct array commands_list){
     char** list = calloc(commands_list.size+1,sizeof(char*));
     if(list == NULL){
         perror("calloc");
-        close(pipe);
+        close_perror(pipe);
         return -1;
     }
 
@@ -459,13 +295,13 @@ int send_command_array(struct array commands_list){
         char *buff = calloc(buffsize,sizeof(char));
         if(buff == NULL){
             perror("calloc");
-            close(pipe);
+            close_perror(pipe);
             return -1;
         }
 
         
 
-        char* time_str = calloc(20,sizeof(char));
+        char* time_str = calloc_perror(20,sizeof(char));
         strftime(time_str,20,"%d/%m/%Y %X",localtime( &commands_list.data[i].next ));
         
 
@@ -489,7 +325,7 @@ int send_command_array(struct array commands_list){
     }
 
     if(send_argv(pipe,list) == -1){
-        close(pipe);
+        close_perror(pipe);
         return -1;
     }
 
@@ -498,10 +334,7 @@ int send_command_array(struct array commands_list){
     }
     free(list);
 
-    if(close(pipe) == -1){
-        perror("close");
-        return -1;
-    }
+    close_perror(pipe);
     
     return 0;
 }
@@ -583,56 +416,36 @@ int main(){
 
     // Set handler
     struct sigaction sig_usr;
-    if(sigemptyset(&sig_usr.sa_mask) == -1){
-        perror("sigemptyset");
-        exit(19);
-    }
+    sigemptyset_perror(&sig_usr.sa_mask);
     sig_usr.sa_handler = hand_sigusr;
     sig_usr.sa_flags = 0;
     
-    if(sigaction(SIGUSR1,&sig_usr,NULL) 
-        || sigaction(SIGUSR2,&sig_usr,NULL) 
-        || sigaction(SIGALRM,&sig_usr,NULL) 
-        || sigaction(SIGCHLD,&sig_usr,NULL)
-        || sigaction(SIGINT,&sig_usr,NULL) 
-        || sigaction(SIGTERM,&sig_usr,NULL) 
-        || sigaction(SIGQUIT,&sig_usr,NULL)){
-
-        perror("sigaction");
-        exit(5);
-    }
+    sigaction_perror(SIGUSR1,&sig_usr,NULL); 
+    sigaction_perror(SIGUSR2,&sig_usr,NULL) ;
+    sigaction_perror(SIGALRM,&sig_usr,NULL) ;
+    sigaction_perror(SIGCHLD,&sig_usr,NULL);
+    sigaction_perror(SIGINT,&sig_usr,NULL) ;
+    sigaction_perror(SIGTERM,&sig_usr,NULL) ;
+    sigaction_perror(SIGQUIT,&sig_usr,NULL);
     
    
     // Set the mask
     sigset_t set;
-    if(sigemptyset(&set) == -1){
-        perror("sigemptyset");
-        exit(15);
-    }
+    sigemptyset_perror(&set);
 
-    if(sigaddset(&set,SIGUSR1) 
-        || sigaddset(&set,SIGUSR2) 
-        || sigaddset(&set,SIGALRM)
-        || sigaddset(&set,SIGCHLD)
-        || sigaddset(&set,SIGINT)
-        || sigaddset(&set,SIGTERM)
-        || sigaddset(&set,SIGQUIT)){
-            
-        perror("sigaddset");
-        exit(16);
-    }
+    sigaddset_perror(&set,SIGUSR1) ;
+    sigaddset_perror(&set,SIGUSR2) ;
+    sigaddset_perror(&set,SIGALRM);
+    sigaddset_perror(&set,SIGCHLD);
+    sigaddset_perror(&set,SIGINT);
+    sigaddset_perror(&set,SIGTERM);
+    sigaddset_perror(&set,SIGQUIT);
 
-    if(sigprocmask(SIG_BLOCK,&set,NULL) == -1){
-        perror("sigprocmask");
-        exit(17);
-    }
+    sigprocmask_perror(SIG_BLOCK,&set,NULL);
 
     // Creation of empty set
     sigset_t empty_set;
-    if(sigemptyset(&empty_set) == -1){
-        perror("sigemptyset");
-        exit(18);
-    }
+    sigemptyset_perror(&empty_set);
 
     while(!stop){
         
@@ -682,7 +495,7 @@ int main(){
     alarm(0);
 
     // Send sigterm to all period child
-    kill(0,SIGTERM);
+    kill_perror(0,SIGTERM);
 
     // zombies elimination
     if(check_zombie(1) == -1){

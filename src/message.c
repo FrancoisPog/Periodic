@@ -1,4 +1,5 @@
 #include "message.h"
+#include "perror.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -22,16 +23,10 @@ int send_string(int fd, const char *str){
     size_t size = strlen(str);
 
     // Write the size in the pipe
-    if(write(fd,&size,sizeof(size_t)) == -1){
-        perror("> Error : [send_string] - write");
-        return -1;
-    }
+    write_perror(fd,&size,sizeof(size_t));
 
     // Write the string in the pipe
-    if(write(fd,str,size*sizeof(char)) == -1){
-        perror("> Error : [send_string] - write");
-        return -1;
-    }
+    write_perror(fd,str,size*sizeof(char));
 
     return 0;
 }
@@ -48,32 +43,18 @@ char *recv_string(int fd){
 
     // Read the size in the pipe
     size_t size;
-    ssize_t n = read(fd,&size,sizeof(size_t));
-    if(n == -1){
-        perror("> Error : [recv_string] - read");
-        return NULL;
-    }
-
+    ssize_t n = read_perror(fd,&size,sizeof(size_t));
     if(n == 0){
         fprintf(stderr,"> Error : [recv_sting] - Nothing to read in the pipe\n");
         return NULL;
     }
 
-    char *str = calloc(size+1,sizeof(char));
-    if(str == NULL){
-        perror("> Error : [recv_string] - calloc");
-        return NULL;
-    }
-
+    char *str = calloc_perror(size+1,sizeof(char));
+    
     // Read the string in the pipe
-    if(read(fd,str,size*sizeof(char)) == -1){
-        perror("> Error : [recv_string] - read");
-        free(str);
-        return NULL;
-    }
+    read_perror(fd,str,size*sizeof(char));
     
     return str;
-
 }
 
 
@@ -102,10 +83,7 @@ int send_argv(int fd, char *argv[]){
     }
    
     // Write the array size in the pipe
-    if(write(fd,&size,sizeof(size_t)) == -1){
-        perror("> Error : [send_argv] - write");
-        return -1;
-    }
+    write_perror(fd,&size,sizeof(size_t));
 
     // Send each string in the pipe
     for(size_t i = 0 ; i < size ; ++i){
@@ -131,12 +109,7 @@ char **recv_argv(int fd){
 
     // Read the array size
     size_t size;
-    ssize_t n = read(fd,&size,sizeof(size_t));
-    if(n == -1){
-        perror("> Error : [recv_argv] - read");
-        return NULL;
-    }
-
+    ssize_t n = read_perror(fd,&size,sizeof(size_t));
     if(n == 0){
         fprintf(stderr,"> Error : [recv_argv] - Nothing to read in the pipe\n");
         return NULL;
@@ -147,11 +120,8 @@ char **recv_argv(int fd){
     }
     
     // Read each string in the pipe
-    char **argv = calloc(size+1,sizeof(char*));
-    if(argv == NULL){
-        fprintf(stderr,"> Error : [recv_argv] - calloc\n");
-        return NULL;
-    }
+    char **argv = calloc_perror(size+1,sizeof(char*));
+    
     for(size_t i = 0 ; i < size ; ++i){
         argv[i] = recv_string(fd);
         if(argv[i] == NULL){

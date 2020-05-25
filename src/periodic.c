@@ -1,6 +1,8 @@
 #define _XOPEN_SOURCE 600
 #define _POSIX_C_SOURE 1
 #include "message.h"
+#include "file.h"
+#include "perror.h"
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,50 +13,6 @@
 #include <time.h>
 #include <signal.h>
 #include <fcntl.h>
-
-/**
- * Get the PID of the current period process.
- * Return : 
- *      > 0 if period is not running
- *      > The PID if period is running  
- *      > -1 if error
- */
-int get_period_pid(){
-    FILE *file = fopen("/tmp/period.pid","r");
-    // Test if the file exists or if an error has occured
-    if(file == NULL){
-        if(errno == ENOENT){
-            return 0;
-        }
-        perror("open");
-        return -1;
-    }
-
-    // Read the pid
-    char buf[8] = "";
-    int n = fread(buf,sizeof(char),8,file);
-    if(n == -1){ // Error while reading
-        perror("read");
-        if(fclose(file) == -1){
-            perror("fclose");
-        }
-        return -1;
-    }
-
-    if(!n){ // Nothing to read
-        fprintf(stderr,"> Error [get_period_pid] - '/tmp/period.pid' is empty\n");
-        if(fclose(file) == -1){
-            perror("fclose");
-        }
-        return -1;
-    }
-
-    if(fclose(file) == -1){
-        perror("fclose");
-    }
-
-    return atoi(buf);
-}
 
 
 
@@ -81,11 +39,8 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
     }
 
     // Get the start value
-    char **endptr = calloc(1,sizeof(char *));
-    if(endptr == NULL){
-        perror("calloc");
-        return -1;
-    }
+    char **endptr = calloc_perror(1,sizeof(char *));
+    
 
 
     if(strcmp(argv[1],"now") == 0){
@@ -148,22 +103,13 @@ int check_args(int argc, char *argv[], time_t *start, int *period, char **cmd, c
 int send_command(char *cmd, char **args, time_t start, int period,int pipe){
 
     short code = 0;
-    if(write(pipe,&code,sizeof(short)) == -1){
-        perror("write");
-        return -1;
-    }
-
+    write_perror(pipe,&code,sizeof(short));
+        
     // Write the start timestamp in the pipe
-    if(write(pipe,&start,sizeof(time_t)) == -1){
-        perror("write");
-        return -1;
-    }
+    write_perror(pipe,&start,sizeof(time_t));
 
     // Write the period in the pipe
-    if(write(pipe,&period,sizeof(int)) == -1){
-        perror("write");
-        return -1;
-    }
+    write(pipe,&period,sizeof(int));
 
     // Write the command name in the pipe
     if(send_string(pipe,cmd) == -1){
@@ -193,22 +139,15 @@ int add_command(int argc, char *argv[],int pid_period){
     kill(pid_period,SIGUSR1);
 
     // Pipe opening
-    int pipe = open("/tmp/period.fifo",O_WRONLY);
-    if(pipe == -1){
-        perror("open");
-        return 2;
-    }
-    //printf("> Pipe opened [WR] : %d\n",pipe);
+    int pipe = open_perror("/tmp/period.fifo",O_WRONLY);
+    
 
     // Send the command's information
     if(send_command(cmd,args,start,period,pipe) == -1){
         return -1;
     }
 
-    if(close(pipe) == -1){
-        perror("close");
-    }
-    //printf("> Pipe closed\n");
+    close_perror(pipe);
 
     return 0;
 }
@@ -221,12 +160,8 @@ int remove_command(char *command_id_str,int pid_period){
     }
     
 
-    char **endptr = calloc(1,sizeof(char *));
-    if(endptr == NULL){
-        perror("calloc");
-        return -1;
-    }
-
+    char **endptr = calloc_perror(1,sizeof(char *));
+   
     ssize_t command_id = strtoll(command_id_str,endptr,10);
 
     if(*endptr != command_id_str + strlen(command_id_str)){
@@ -245,28 +180,16 @@ int remove_command(char *command_id_str,int pid_period){
     kill(pid_period,SIGUSR1);
 
     // Pipe opening
-    int pipe = open("/tmp/period.fifo",O_WRONLY);
-    if(pipe == -1){
-        perror("open");
-        return 2;
-    }
+    int pipe = open_perror("/tmp/period.fifo",O_WRONLY);
 
     short code = 1;
-    if(write(pipe,&code,sizeof(short)) == -1){
-        perror("write");
-        return -1;
-    }
+    write_perror(pipe,&code,sizeof(short));
 
     //printf("id : %lld\n",command_id);
 
-    if(write(pipe,&command_id,sizeof(size_t)) == -1){
-        perror("write");
-        return -1;
-    }
+    write_perror(pipe,&command_id,sizeof(size_t));
 
-    if(close(pipe) == -1){
-        perror("close");
-    }
+    close_perror(pipe);
 
     return 0;
 }
@@ -275,24 +198,16 @@ int remove_command(char *command_id_str,int pid_period){
  * Receive a command from periodic
  */ 
 int recv_command_array(pid_t pid){
-    if(kill(pid,SIGUSR2) == -1){
-        perror("kill");
-        return -1;
-    }
+    kill_perror(pid,SIGUSR2);
 
-    int pipe = open("/tmp/period.fifo",O_RDONLY);
-    if(pipe == -1){
-        perror("open");
-        return -1;
-    }
+    int pipe = open_perror("/tmp/period.fifo",O_RDONLY);
     
-
     char** list = recv_argv(pipe);
     if(list == NULL){
         return -1;
     }
 
-    char* now_str = calloc(20,sizeof(char));
+    char* now_str = calloc_perror(20,sizeof(char));
     time_t now = time(NULL);
     strftime(now_str,20,"%d/%m/%Y %X",localtime(&now));
     
@@ -307,10 +222,7 @@ int recv_command_array(pid_t pid){
     }
     
     free(list);
-    if(close(pipe) == -1){
-        perror("close");
-        return -1;
-    }
+    close_perror(pipe);
 
     return 0;
 }
