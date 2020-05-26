@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 1
+#include "perror.h"
 #include <stdio.h>
 #include <wait.h>
 #include <sys/types.h>
