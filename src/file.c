@@ -126,8 +126,8 @@ int get_period_pid(){
     }
 
     // Read the pid
-    char buf[8] = "";
-    int n = fread(buf,sizeof(char),8,file);
+    char buf[10] = "";
+    int n = fread(buf,sizeof(char),10,file);
 
     if(!n){ // Nothing to read
         fclose_perror(file);

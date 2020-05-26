@@ -13,12 +13,7 @@
  * argv : The arguments value
  */ 
 int daemonize(char *argv[]){
-    pid_t pid = fork();
-
-    if(pid == -1){
-        perror("fork");
-        return -1;
-    }
+    pid_t pid = fork_perror();
 
     if(pid == 0){
 
@@ -27,12 +22,7 @@ int daemonize(char *argv[]){
             exit(1);
         }
 
-        pid_t pidGrandChild = fork();
-
-        if(pidGrandChild == -1){
-            perror("fork");
-            exit(2);
-        }
+        pid_t pidGrandChild = fork_perror();
 
         if(pidGrandChild == 0){
             printf("daemon : %d\n",getpid());
@@ -44,10 +34,10 @@ int daemonize(char *argv[]){
                 exit(2);
             }
 
-            if(fclose(stdin) || fclose(stdout) || fclose(stderr)){
-                perror("fclose");
-                exit(3);
-            }
+            fclose_perror(stdin);
+            fclose_perror(stdout);
+            fclose_perror(stderr);
+                
             
             execvp(argv[1],argv+1);
             perror("execvp");

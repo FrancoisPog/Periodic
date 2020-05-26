@@ -6,10 +6,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-/**
- * this compilation unit is used to avoid checking the return of the system call in case of failure,
- * all the usual system calls are suffixed by _perror, but the arguments are the same as the original function
- */ 
 
 void *calloc_perror(size_t n, size_t size){
     void *res = calloc(n,size);
