@@ -1,0 +1,12 @@
+# Object files
+object/*
+
+# lib files
+*.so
+
+# program files
+periodic
+period
+launch_daemon
+when
+now

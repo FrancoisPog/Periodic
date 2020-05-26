@@ -57,7 +57,7 @@ $(OBJDIR)/%.o : $(SRCDIR)/%.c
 
 .PHONY : clean
 clean : 
-	rm -f $(OBJDIR)/*.o
+	rm -f $(OBJDIR)/*.o 
 
 
 .PHONY : mrproper
