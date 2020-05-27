@@ -3,6 +3,7 @@ CC=gcc
 CFLAGS=-Wall -std=c99 -g -Iinclude
 
 # Directory
+INCDIR=include
 SRCDIR=src
 OBJDIR=object
 
@@ -19,10 +20,10 @@ OBJDIR_DELETE = if test -d $(OBJDIR) ; then rmdir $(OBJDIR) ; fi
 # to use libmessage.so : export LD_LIBRARY_PATH=${PWD} on the shell
 
 .PHONY : all
-all : $(PROGRAMS) $(LIBS) $(OTHER)
+all : $(LIBS) $(PROGRAMS)  $(OTHER)
 
 .PHONY : prog
-prog : $(PROGRAMS)
+prog : lib $(PROGRAMS)
 
 .PHONY : lib
 lib : $(LIBS)
@@ -30,17 +31,17 @@ lib : $(LIBS)
 .PHONY : other
 other : $(OTHER)
 
-launch_daemon : $(OBJDIR)/launch_daemon.o libperror.so 
+launch_daemon : $(OBJDIR)/launch_daemon.o $(INCDIR)/perror.h
 	@echo make : launch_daemon
 	@$(CC) $(CFLAGS) -L${PWD} $< -lperror  -o $@
 
 
-periodic : $(OBJDIR)/periodic.o libmessage.so libperror.so $(OBJDIR)/file.o 
+periodic : $(OBJDIR)/periodic.o   $(OBJDIR)/file.o $(INCDIR)/perror.h $(INCDIR)/message.h
 	@echo make : $@
 	@$(CC) $(CFLAGS) -L${PWD} $< $(OBJDIR)/file.o -lmessage -lperror  -o $@
 
 
-period : $(OBJDIR)/period.o libmessage.so libperror.so $(OBJDIR)/command.o $(OBJDIR)/file.o 
+period : $(OBJDIR)/period.o  $(OBJDIR)/command.o $(OBJDIR)/file.o $(INCDIR)/perror.h $(INCDIR)/message.h
 	@echo make : $@
 	@$(CC) $(CFLAGS) -L${PWD} $< $(OBJDIR)/command.o $(OBJDIR)/file.o -lmessage -lperror  -o $@
 
@@ -50,13 +51,13 @@ lib%.so : $(OBJDIR)/%.o
 	@$(CC) -shared $< -o $@
 
 
-$(OBJDIR)/message.o : $(SRCDIR)/message.c 
+$(OBJDIR)/message.o : $(SRCDIR)/message.c $(INCDIR)/message.h
 	@echo make : $@
 	@$(OBJDIR_CREATE)
 	@$(CC) $(CFLAGS) -fPIC -c -o $@ $<
 
 
-$(OBJDIR)/perror.o : $(SRCDIR)/perror.c 
+$(OBJDIR)/perror.o : $(SRCDIR)/perror.c $(INCDIR)/perror.h
 	@echo make : $@
 	@$(OBJDIR_CREATE)
 	@$(CC) $(CFLAGS) -fPIC -c -o $@ $<
