@@ -1,6 +1,6 @@
 # Periodic
 
-***[ University Project | February 2020 ]***
+***[ University Project | Spring 2020 ]***
 
 Program to execute commands at regular time intervals. C programming project. 
 
